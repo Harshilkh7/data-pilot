@@ -123,7 +123,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '2rem',
-        background: 'radial-gradient(ellipse at 50% 0%, rgba(255,122,89,0.04) 0%, transparent 65%)',
+        background: 'radial-gradient(ellipse at 50% 0%, rgba(98,160,255,0.04) 0%, transparent 65%)',
       }}
     >
       {/* Header */}
@@ -136,7 +136,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
           height: 56,
           borderRadius: 14,
           background: 'var(--color-accent-muted)',
-          border: '1px solid rgba(255,122,89,0.25)',
+          border: '1px solid rgba(98,160,255,0.25)',
           marginBottom: '1.25rem',
         }}>
           <Database size={28} color="var(--color-accent)" />
