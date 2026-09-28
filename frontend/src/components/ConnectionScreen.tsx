@@ -53,6 +53,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
         database_name: res.database_name,
         db_type: res.db_type,
         schema_overview: res.schema_overview,
+        connection_mode: 'demo',
       });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -103,6 +104,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
         database_name: res.database_name,
         db_type: res.db_type,
         schema_overview: res.schema_overview,
+        connection_mode: 'custom',
       });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
