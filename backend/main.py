@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=" * 60)
-    logger.info("  QueryMind API starting up")
+    logger.info("  DataPilot API starting up")
     logger.info("  Groq model  : %s", config.GEMINI_MODEL)
     logger.info("  Demo DB     : %s", config.DATABASE_URL)
     logger.info("  Read-only   : %s", config.READ_ONLY_MODE)
@@ -56,14 +56,14 @@ async def lifespan(app: FastAPI):
     # Cleanup: dispose all open DB engines on shutdown
     for sid in list(SESSION_STORE.keys()):
         remove_session(sid)
-    logger.info("QueryMind API shut down cleanly.")
+    logger.info("DataPilot API shut down cleanly.")
 
 
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="QueryMind API",
+    title="DataPilot API",
     description="Natural Language to SQL Data Analyst — agentic query engine.",
     version="1.0.0",
     lifespan=lifespan,
