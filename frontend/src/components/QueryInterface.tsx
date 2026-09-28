@@ -65,9 +65,9 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="workspace-shell">
       {/* Top navigation bar */}
-      <header style={{
+      <header className="workspace-topbar" style={{
         display: 'flex',
         alignItems: 'center',
         gap: '1rem',
@@ -77,14 +77,14 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
         flexShrink: 0,
         zIndex: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="workspace-brand">
           <Database size={18} color="var(--color-accent)" />
           <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>DataPilot</span>
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div className="workspace-topbar-spacer" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="workspace-meta">
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
             Connected to
           </span>
@@ -103,11 +103,11 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
       </header>
 
       {/* Main content area — scrollable */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+      <div className="workspace-scroll">
+        <div className="workspace-content">
 
           {/* Schema panel */}
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div className="schema-wrap">
             <SchemaPanel
               databaseName={session.database_name}
               dbType={session.db_type}
@@ -118,16 +118,8 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
 
           {/* Empty state */}
           {history.length === 0 && !loading && (
-            <div style={{
-              textAlign: 'center',
-              padding: '4rem 2rem',
-              color: 'var(--color-text-muted)',
-            }}>
-              <div style={{
-                fontSize: '2.5rem',
-                marginBottom: '1rem',
-                filter: 'grayscale(0.3)',
-              }}>🔍</div>
+            <div className="workspace-empty">
+              <div className="empty-orbit"><span>✦</span></div>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '0 0 0.5rem' }}>
                 Ask your first question
               </h2>
@@ -152,13 +144,8 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
       </div>
 
       {/* Sticky input bar */}
-      <div style={{
-        borderTop: '1px solid var(--color-border)',
-        background: 'var(--color-bg-card)',
-        padding: '1rem 1.5rem',
-        flexShrink: 0,
-      }}>
-        <div style={{ maxWidth: 860, margin: '0 auto' }}>
+      <div className="query-dock">
+        <div className="query-dock-inner">
           <QueryInput
             onSubmit={handleQuestion}
             loading={loading}
