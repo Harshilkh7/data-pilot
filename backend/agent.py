@@ -3,7 +3,7 @@ agent.py — LangGraph agentic workflow for DataPilot.
 
 Graph flow:
     retrieve_schema
-        → generate_sql        (LLM: Gemini llama-3.3-70b-versatile)
+        → generate_sql        (LLM: Google Gemini)
         → validate_sql        (sqlglot: parse + reject DDL/DML)
         → limit_inject        (enforce LIMIT before execution)
         → execute_sql         (read-only DB engine)
@@ -15,7 +15,7 @@ Retry logic:
     - execute_sql failure  → back to generate_sql (with DB error in context)
     - Max MAX_AGENT_ATTEMPTS total combined retries. On exhaustion → END with error.
 
-The LLM is called directly via the Gemini Python SDK (no LangChain).
+The LLM is called directly via the Gemini Generative Language API.
 """
 
 import json
