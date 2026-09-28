@@ -79,7 +79,7 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Database size={18} color="var(--color-accent)" />
-          <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>QueryMind</span>
+          <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>DataPilot</span>
         </div>
 
         <div style={{ flex: 1 }} />
