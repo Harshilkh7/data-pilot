@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# config is imported first — GROQ_API_KEY fail-fast check runs at import time
+# config is imported first — Gemini API key validation runs at import time
 import config
 from database import (
     validate_and_connect,
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("  DataPilot API starting up")
-    logger.info("  Groq model  : %s", config.GEMINI_MODEL)
+    logger.info("  Gemini model: %s", config.GEMINI_MODEL)
     logger.info("  Demo DB     : %s", config.DATABASE_URL)
     logger.info("  Read-only   : %s", config.READ_ONLY_MODE)
     logger.info("  CORS origins: %s", config.ALLOWED_ORIGINS)
