@@ -1,4 +1,4 @@
-// src/types.ts — shared TypeScript interfaces for QueryMind
+// src/types.ts — shared TypeScript interfaces for DataPilot
 
 export interface SchemaTable {
   table: string;
