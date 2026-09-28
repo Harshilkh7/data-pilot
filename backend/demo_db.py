@@ -1,158 +1,256 @@
-"""Small, deterministic Chinook-style SQLite database for the hosted demo."""
+"""Deterministic e-commerce SQLite database for the hosted DataPilot demo.
+
+The demo is realistic enough to exercise joins, aggregation, filtering,
+date analysis, customer analytics, product analytics, payments, reviews,
+and logistics. It is seeded only when the database has no tables.
+"""
 
 from pathlib import Path
+import random
 import sqlite3
+from datetime import datetime, timedelta
+
+SEED = 42
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
-CREATE TABLE IF NOT EXISTS artists (
-  ArtistId INTEGER PRIMARY KEY,
-  Name TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS albums (
-  AlbumId INTEGER PRIMARY KEY,
-  Title TEXT NOT NULL,
-  ArtistId INTEGER NOT NULL REFERENCES artists(ArtistId)
-);
-CREATE TABLE IF NOT EXISTS genres (
-  GenreId INTEGER PRIMARY KEY,
-  Name TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS media_types (
-  MediaTypeId INTEGER PRIMARY KEY,
-  Name TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS tracks (
-  TrackId INTEGER PRIMARY KEY,
-  Name TEXT NOT NULL,
-  AlbumId INTEGER REFERENCES albums(AlbumId),
-  MediaTypeId INTEGER REFERENCES media_types(MediaTypeId),
-  GenreId INTEGER REFERENCES genres(GenreId),
-  Composer TEXT,
-  Milliseconds INTEGER,
-  Bytes INTEGER,
-  UnitPrice REAL
-);
+
 CREATE TABLE IF NOT EXISTS customers (
-  CustomerId INTEGER PRIMARY KEY,
-  FirstName TEXT NOT NULL,
-  LastName TEXT NOT NULL,
-  Company TEXT,
-  Address TEXT,
-  City TEXT,
-  State TEXT,
-  Country TEXT,
-  Email TEXT
+  customer_id INTEGER PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  country TEXT NOT NULL,
+  signup_date TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS employees (
-  EmployeeId INTEGER PRIMARY KEY,
-  LastName TEXT NOT NULL,
-  FirstName TEXT NOT NULL,
-  Title TEXT,
-  City TEXT,
-  Country TEXT,
-  Email TEXT
+CREATE TABLE IF NOT EXISTS sellers (
+  seller_id INTEGER PRIMARY KEY,
+  seller_name TEXT NOT NULL,
+  seller_city TEXT NOT NULL,
+  seller_country TEXT NOT NULL,
+  rating REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS invoices (
-  InvoiceId INTEGER PRIMARY KEY,
-  CustomerId INTEGER REFERENCES customers(CustomerId),
-  InvoiceDate TEXT,
-  BillingCountry TEXT,
-  Total REAL
+CREATE TABLE IF NOT EXISTS categories (
+  category_id INTEGER PRIMARY KEY,
+  category_name TEXT NOT NULL UNIQUE
 );
-CREATE TABLE IF NOT EXISTS invoice_lines (
-  InvoiceLineId INTEGER PRIMARY KEY,
-  InvoiceId INTEGER REFERENCES invoices(InvoiceId),
-  TrackId INTEGER REFERENCES tracks(TrackId),
-  UnitPrice REAL,
-  Quantity INTEGER
+CREATE TABLE IF NOT EXISTS products (
+  product_id INTEGER PRIMARY KEY,
+  product_name TEXT NOT NULL,
+  category_id INTEGER NOT NULL REFERENCES categories(category_id),
+  seller_id INTEGER NOT NULL REFERENCES sellers(seller_id),
+  price REAL NOT NULL,
+  cost REAL NOT NULL,
+  stock_quantity INTEGER NOT NULL,
+  created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS playlists (
-  PlaylistId INTEGER PRIMARY KEY,
-  Name TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS orders (
+  order_id INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(customer_id),
+  order_date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  shipping_city TEXT NOT NULL,
+  shipping_state TEXT NOT NULL,
+  shipping_country TEXT NOT NULL,
+  subtotal REAL NOT NULL,
+  shipping_fee REAL NOT NULL,
+  discount REAL NOT NULL,
+  total_amount REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS playlist_tracks (
-  PlaylistId INTEGER REFERENCES playlists(PlaylistId),
-  TrackId INTEGER REFERENCES tracks(TrackId),
-  PRIMARY KEY (PlaylistId, TrackId)
+CREATE TABLE IF NOT EXISTS order_items (
+  order_item_id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(order_id),
+  product_id INTEGER NOT NULL REFERENCES products(product_id),
+  quantity INTEGER NOT NULL,
+  unit_price REAL NOT NULL,
+  item_total REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS payments (
+  payment_id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL UNIQUE REFERENCES orders(order_id),
+  payment_date TEXT NOT NULL,
+  payment_method TEXT NOT NULL,
+  payment_status TEXT NOT NULL,
+  amount REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS reviews (
+  review_id INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(customer_id),
+  product_id INTEGER NOT NULL REFERENCES products(product_id),
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  review_text TEXT,
+  review_date TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS shipments (
+  shipment_id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL UNIQUE REFERENCES orders(order_id),
+  shipped_date TEXT,
+  delivered_date TEXT,
+  carrier TEXT NOT NULL,
+  shipping_status TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 """
+
+FIRST_NAMES = [
+    "Aarav","Vivaan","Aditya","Arjun","Kabir","Rohan","Ishaan","Reyansh",
+    "Aanya","Ananya","Diya","Ira","Meera","Sara","Emma","Olivia",
+    "Liam","Noah","Sophia","Mia","Lucas","Ethan","Ava","Mason"
+]
+LAST_NAMES = [
+    "Sharma","Khan","Patel","Verma","Gupta","Mehta","Singh","Khandelwal",
+    "Brown","Smith","Johnson","Williams","Davis","Wilson","Taylor","Martin"
+]
+LOCATIONS = [
+    ("Bhopal","Madhya Pradesh","India"),("Indore","Madhya Pradesh","India"),
+    ("Mumbai","Maharashtra","India"),("Delhi","Delhi","India"),
+    ("Bengaluru","Karnataka","India"),("Pune","Maharashtra","India"),
+    ("Hyderabad","Telangana","India"),("Jaipur","Rajasthan","India"),
+    ("New York","NY","USA"),("London","England","UK"),("Toronto","Ontario","Canada")
+]
+PRODUCTS = [
+    ("Wireless Headphones","Electronics",79.99,42.00),
+    ("Mechanical Keyboard","Electronics",119.99,68.00),
+    ("USB-C Hub","Electronics",39.99,18.00),
+    ("Smart Watch","Electronics",149.99,92.00),
+    ("Bluetooth Speaker","Electronics",59.99,31.00),
+    ("Running Shoes","Footwear",89.99,48.00),
+    ("Casual Sneakers","Footwear",69.99,36.00),
+    ("Hiking Boots","Footwear",129.99,72.00),
+    ("Cotton T-Shirt","Apparel",24.99,10.00),
+    ("Denim Jacket","Apparel",64.99,31.00),
+    ("Hoodie","Apparel",49.99,24.00),
+    ("Backpack","Accessories",54.99,27.00),
+    ("Leather Wallet","Accessories",34.99,15.00),
+    ("Sunglasses","Accessories",44.99,19.00),
+    ("Coffee Maker","Home & Kitchen",99.99,55.00),
+    ("Air Fryer","Home & Kitchen",109.99,61.00),
+    ("Water Bottle","Home & Kitchen",22.99,9.00),
+    ("Desk Lamp","Home & Kitchen",32.99,14.00),
+    ("Yoga Mat","Sports",29.99,12.00),
+    ("Dumbbell Set","Sports",79.99,43.00)
+]
+STATUSES = ["delivered","delivered","delivered","shipped","processing","cancelled","returned"]
+PAYMENT_METHODS = ["credit_card","debit_card","upi","paypal","net_banking"]
+CARRIERS = ["Delhivery","Blue Dart","FedEx","DHL","UPS"]
+
+def _date_for(rng, start, end):
+    return start + timedelta(seconds=rng.randint(0, int((end-start).total_seconds())))
 
 def ensure_demo_database(path: str | Path) -> None:
     db_path = Path(path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
-        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        if tables:
+        existing = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        if existing:
             return
+
         conn.executescript(SCHEMA)
+        rng = random.Random(SEED)
+        start, end = datetime(2025,1,1), datetime(2026,9,15)
 
-        artists = [
-            (1, "AC/DC"), (2, "Accept"), (3, "Aerosmith"), (4, "Alanis Morissette"),
-            (5, "Alice In Chains"), (6, "Apocalyptica"), (7, "Audioslave"),
-            (8, "Black Sabbath"), (9, "Iron Maiden"), (10, "Metallica"),
-            (11, "Miles Davis"), (12, "Nirvana"), (13, "Queen"), (14, "U2"),
-            (15, "The Beatles")
+        categories = sorted({p[1] for p in PRODUCTS})
+        conn.executemany(
+            "INSERT INTO categories(category_id,category_name) VALUES (?,?)",
+            list(enumerate(categories,1))
+        )
+        category_id = {name:i for i,name in enumerate(categories,1)}
+
+        sellers = [
+            (1,"TechCart India","Bengaluru","India",4.7),
+            (2,"Urban Essentials","Mumbai","India",4.5),
+            (3,"Global Goods","Delhi","India",4.6),
+            (4,"Prime Marketplace","New York","USA",4.4),
+            (5,"Northstar Retail","London","UK",4.8),
+            (6,"Maple Commerce","Toronto","Canada",4.3)
         ]
-        conn.executemany("INSERT INTO artists VALUES (?,?)", artists)
+        conn.executemany("INSERT INTO sellers VALUES (?,?,?,?,?)", sellers)
 
-        albums = [
-            (1, "For Those About To Rock", 1), (2, "Restless and Wild", 2),
-            (3, "Big Ones", 3), (4, "Jagged Little Pill", 4),
-            (5, "Facelift", 5), (6, "Plays Metallica By Four Cellos", 6),
-            (7, "Audioslave", 7), (8, "Paranoid", 8), (9, "The Number of the Beast", 9),
-            (10, "Master of Puppets", 10), (11, "Kind of Blue", 11),
-            (12, "Nevermind", 12), (13, "A Night at the Opera", 13),
-            (14, "Achtung Baby", 14), (15, "Abbey Road", 15)
-        ]
-        conn.executemany("INSERT INTO albums VALUES (?,?,?)", albums)
+        products = []
+        pid = 1
+        for base_name,cat,base_price,base_cost in PRODUCTS:
+            for variant in range(1,6):
+                price = round(base_price*(0.92+variant*0.025),2)
+                cost = round(base_cost*(0.92+variant*0.02),2)
+                products.append((
+                    pid,f"{base_name} {variant}",category_id[cat],
+                    ((pid-1)%len(sellers))+1,price,cost,rng.randint(5,250),
+                    _date_for(rng,start,datetime(2026,6,30)).date().isoformat()
+                ))
+                pid += 1
+        conn.executemany("INSERT INTO products VALUES (?,?,?,?,?,?,?,?)", products)
 
-        genres = [(1,"Rock"), (2,"Metal"), (3,"Jazz"), (4,"Alternative"), (5,"Pop")]
-        media = [(1,"MPEG audio file"), (2,"Protected AAC audio file")]
-        conn.executemany("INSERT INTO genres VALUES (?,?)", genres)
-        conn.executemany("INSERT INTO media_types VALUES (?,?)", media)
+        customers = []
+        for cid in range(1,501):
+            first,last = rng.choice(FIRST_NAMES),rng.choice(LAST_NAMES)
+            city,state,country = rng.choice(LOCATIONS)
+            signup = _date_for(rng,datetime(2024,1,1),datetime(2026,8,31)).date().isoformat()
+            email = f"{first.lower()}.{last.lower()}{cid}@demo.datapilot.local"
+            customers.append((cid,first,last,email,city,state,country,signup))
+        conn.executemany("INSERT INTO customers VALUES (?,?,?,?,?,?,?,?)", customers)
 
-        tracks = []
-        for i in range(1, 61):
-            album_id = ((i - 1) % 15) + 1
-            genre_id = 2 if album_id in (2,6,8,9,10) else (3 if album_id == 11 else (5 if album_id in (4,15) else 1))
-            tracks.append((i, f"Demo Track {i}", album_id, 1, genre_id, None, 180000 + (i * 1000), 5000000 + i * 10000, 0.99))
-        conn.executemany("INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?)", tracks)
+        orders,items,payments,shipments = [],[],[],[]
+        for oid in range(1,3001):
+            cid = rng.randint(1,500)
+            order_dt = _date_for(rng,start,end)
+            status = rng.choice(STATUSES)
+            city,state,country = rng.choice(LOCATIONS)
+            subtotal = 0.0
+            for product in rng.sample(products,rng.randint(1,5)):
+                qty = rng.randint(1,3)
+                item_total = round(qty*product[4],2)
+                subtotal += item_total
+                items.append((len(items)+1,oid,product[0],qty,product[4],item_total))
+            subtotal = round(subtotal,2)
+            shipping = 0.0 if subtotal >= 75 else round(rng.choice([4.99,7.99,9.99]),2)
+            discount = round(subtotal*rng.choice([0,0,0.05,0.10,0.15]),2)
+            total = round(subtotal+shipping-discount,2)
+            orders.append((oid,cid,order_dt.isoformat(timespec="seconds"),status,
+                           city,state,country,subtotal,shipping,discount,total))
 
-        customers = [
-            (1,"Harshil","Khandelwal",None,"MANIT Campus","Bhopal","MP","India","demo1@datapilot.local"),
-            (2,"Aarav","Sharma",None,"MG Road","Indore","MP","India","demo2@datapilot.local"),
-            (3,"Emma","Johnson",None,"Main Street","New York","NY","USA","demo3@datapilot.local"),
-            (4,"Liam","Smith",None,"King Street","London",None,"UK","demo4@datapilot.local"),
-            (5,"Sophia","Brown",None,"Queen Street","Toronto","ON","Canada","demo5@datapilot.local")
-        ]
-        conn.executemany("INSERT INTO customers VALUES (?,?,?,?,?,?,?,?,?)", customers)
-        employees = [
-            (1,"Adams","Andrew","General Manager","Edmonton","Canada","andrew@datapilot.local"),
-            (2,"Edwards","Nancy","Sales Manager","Calgary","Canada","nancy@datapilot.local"),
-            (3,"Peacock","Jane","Sales Support Agent","Calgary","Canada","jane@datapilot.local")
-        ]
-        conn.executemany("INSERT INTO employees VALUES (?,?,?,?,?,?,?)", employees)
+            pay_status = "failed" if status=="cancelled" and rng.random()<0.25 else "paid"
+            payments.append((oid,oid,order_dt.isoformat(timespec="seconds"),
+                             rng.choice(PAYMENT_METHODS),pay_status,total))
 
-        invoices = []
-        for i in range(1, 21):
-            customer_id = ((i - 1) % 5) + 1
-            invoices.append((i, customer_id, f"2026-09-{(i % 28) + 1:02d}", ["India","USA","UK","Canada"][customer_id % 4], round(9.99 + i * 1.25, 2)))
-        conn.executemany("INSERT INTO invoices VALUES (?,?,?,?,?)", invoices)
+            shipped = delivered = None
+            if status in {"shipped","delivered","returned"}:
+                shipped_dt = order_dt + timedelta(days=rng.randint(1,3))
+                shipped = shipped_dt.isoformat(timespec="seconds")
+                if status in {"delivered","returned"}:
+                    delivered = (shipped_dt+timedelta(days=rng.randint(1,6))).isoformat(timespec="seconds")
+            ship_status = (
+                "delivered" if status=="delivered" else
+                "returned" if status=="returned" else
+                "shipped" if status=="shipped" else "pending"
+            )
+            shipments.append((oid,oid,shipped,delivered,rng.choice(CARRIERS),ship_status))
 
-        lines = []
-        line_id = 1
-        for invoice_id in range(1, 21):
-            for offset in range(3):
-                track_id = ((invoice_id * 3 + offset - 1) % 60) + 1
-                lines.append((line_id, invoice_id, track_id, 0.99, 1))
-                line_id += 1
-        conn.executemany("INSERT INTO invoice_lines VALUES (?,?,?,?,?)", lines)
+        conn.executemany("INSERT INTO orders VALUES (?,?,?,?,?,?,?,?,?,?,?)", orders)
+        conn.executemany("INSERT INTO order_items VALUES (?,?,?,?,?,?)", items)
+        conn.executemany("INSERT INTO payments VALUES (?,?,?,?,?,?)", payments)
+        conn.executemany("INSERT INTO shipments VALUES (?,?,?,?,?,?)", shipments)
 
-        conn.executemany("INSERT INTO playlists VALUES (?,?)", [(1,"Rock Favorites"),(2,"Metal Essentials"),(3,"Jazz Classics"),(4,"Top Tracks")])
-        playlist_rows = []
-        for playlist_id in range(1,5):
-            for track_id in range(playlist_id, 61, 4):
-                playlist_rows.append((playlist_id, track_id))
-        conn.executemany("INSERT INTO playlist_tracks VALUES (?,?)", playlist_rows)
+        reviews = []
+        for rid in range(1,1601):
+            rating = rng.choices([1,2,3,4,5],weights=[3,5,12,30,50])[0]
+            reviews.append((
+                rid,rng.randint(1,500),rng.randint(1,len(products)),rating,
+                rng.choice([
+                    "Great value for the price.","Works exactly as expected.",
+                    "Fast delivery and good quality.","Average product, but acceptable.",
+                    "Not what I expected from the listing."
+                ]),
+                _date_for(rng,start,end).date().isoformat()
+            ))
+        conn.executemany("INSERT INTO reviews VALUES (?,?,?,?,?,?)", reviews)
         conn.commit()
