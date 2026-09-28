@@ -55,4 +55,5 @@ export interface AppSession {
   database_name: string;
   db_type: string;
   schema_overview: SchemaTable[];
+  connection_mode: 'demo' | 'custom';
 }
