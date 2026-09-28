@@ -110,7 +110,7 @@ def download_postgres_script(pg_url: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Set up the Chinook sample database for QueryMind."
+        description="Set up the Chinook sample database for DataPilot."
     )
     parser.add_argument(
         "--postgres",
