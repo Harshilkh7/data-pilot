@@ -6,13 +6,11 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / ".env")
 
-
 def req(k):
     v = os.getenv(k, "").strip()
     if not v:
         raise RuntimeError(f"Missing required environment variable: {k}")
     return v
-
 
 GEMINI_API_KEY = req("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -26,24 +24,21 @@ GEMINI_FALLBACK_MODELS = [
 ]
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
+# Hosted demo database. Custom DATABASE_URL values still take precedence.
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    f"sqlite:///{(ROOT / 'chinook.db').resolve().as_posix()}",
+    f"sqlite:///{(ROOT / 'ecommerce.db').resolve().as_posix()}",
 )
 READ_ONLY_DATABASE_URL = os.getenv("READ_ONLY_DATABASE_URL") or None
 READ_ONLY_MODE = os.getenv("READ_ONLY_MODE", "false").lower() in ("1", "true", "yes")
 
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").rstrip("/")
-ALLOWED_ORIGINS = list(
-    dict.fromkeys(
-        [
-            FRONTEND_ORIGIN,
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-        ]
-    )
-)
+ALLOWED_ORIGINS = list(dict.fromkeys([
+    FRONTEND_ORIGIN,
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+]))
 
 MAX_AGENT_ATTEMPTS = int(os.getenv("MAX_AGENT_ATTEMPTS", "3"))
 DEFAULT_ROW_LIMIT = int(os.getenv("DEFAULT_ROW_LIMIT", "500"))
