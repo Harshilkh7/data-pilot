@@ -1,0 +1,405 @@
+// src/components/ConnectionScreen.tsx
+import { useState } from 'react';
+import { Database, Zap, ChevronRight, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import type { AppSession, ConnectionMode } from '../types';
+import { connectWithString, connectManual, connectDemo } from '../api';
+
+interface Props {
+  onConnected: (session: AppSession) => void;
+}
+
+export default function ConnectionScreen({ onConnected }: Props) {
+  const [mode, setMode] = useState<ConnectionMode>('string');
+  const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [demoError, setDemoError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // String mode
+  const [connString, setConnString] = useState('');
+  const [connStringError, setConnStringError] = useState('');
+
+  // Manual mode
+  const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'sqlite'>('postgresql');
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('');
+  const [database, setDatabase] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [manualErrors, setManualErrors] = useState<{
+    host?: string;
+    port?: string;
+    database?: string;
+    username?: string;
+    password?: string;
+  }>({});
+
+  // Real-time button disabling validation
+  const isConnectDisabled = mode === 'string'
+    ? !connString.trim()
+    : dbType === 'sqlite'
+      ? !database.trim()
+      : !host.trim() || !port.trim() || !database.trim() || !username.trim() || !password.trim();
+
+  const handleDemo = async () => {
+    setDemoLoading(true);
+    setDemoError('');
+    setError('');
+    try {
+      const res = await connectDemo();
+      onConnected({
+        session_id: res.session_id,
+        database_name: res.database_name,
+        db_type: res.db_type,
+        schema_overview: res.schema_overview,
+      });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? (e instanceof Error ? e.message : 'Demo connection failed');
+      setDemoError(msg);
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    // Validate
+    if (mode === 'string') {
+      if (!connString.trim()) {
+        setConnStringError('Connection string is required.');
+        return;
+      }
+      setConnStringError('');
+    } else {
+      const newErrors: typeof manualErrors = {};
+      if (dbType === 'sqlite') {
+        if (!database.trim()) newErrors.database = 'File path is required.';
+      } else {
+        if (!host.trim()) newErrors.host = 'Host is required.';
+        if (!port.trim()) newErrors.port = 'Port is required.';
+        if (!database.trim()) newErrors.database = 'Database name is required.';
+        if (!username.trim()) newErrors.username = 'Username is required.';
+        if (!password.trim()) newErrors.password = 'Password is required.';
+      }
+      if (Object.keys(newErrors).length > 0) {
+        setManualErrors(newErrors);
+        return;
+      }
+      setManualErrors({});
+    }
+
+    setLoading(true);
+    setError('');
+    try {
+      let res;
+      if (mode === 'string') {
+        res = await connectWithString(connString.trim());
+      } else {
+        res = await connectManual({ db_type: dbType, host, port, database, username, password });
+      }
+      onConnected({
+        session_id: res.session_id,
+        database_name: res.database_name,
+        db_type: res.db_type,
+        schema_overview: res.schema_overview,
+      });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? (e instanceof Error ? e.message : 'Connection failed');
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      id="connection-screen"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        background: 'radial-gradient(ellipse at 50% 0%, rgba(255,122,89,0.04) 0%, transparent 65%)',
+      }}
+    >
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 56,
+          height: 56,
+          borderRadius: 14,
+          background: 'var(--color-accent-muted)',
+          border: '1px solid rgba(255,122,89,0.25)',
+          marginBottom: '1.25rem',
+        }}>
+          <Database size={28} color="var(--color-accent)" />
+        </div>
+        <h1 style={{
+          fontSize: '2.25rem',
+          fontWeight: 700,
+          margin: 0,
+          background: 'linear-gradient(135deg, #f5f5f7 0%, #a1a1aa 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          letterSpacing: '-0.02em',
+        }}>
+          DataPilot
+        </h1>
+        <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem', fontSize: '0.95rem' }}>
+          Natural Language to SQL — connect your database to get started
+        </p>
+      </div>
+
+      {/* Main card */}
+      <div className="card" style={{ width: '100%', maxWidth: 480, padding: '2rem' }}>
+
+        {/* Demo button */}
+        <button
+          id="demo-connect-btn"
+          className="btn btn-secondary"
+          onClick={handleDemo}
+          disabled={demoLoading || loading}
+          style={{ width: '100%', marginBottom: '1rem', justifyContent: 'center' }}
+        >
+          {demoLoading ? (
+            <Loader2 size={15} className="animate-spin-slow" />
+          ) : (
+            <Zap size={15} />
+          )}
+          {demoLoading ? 'Connecting to demo…' : 'Try Demo (Chinook DB)'}
+        </button>
+
+        {/* Demo Connection Error */}
+        {demoError && (
+          <div className="alert alert-error animate-fade-in" style={{ marginBottom: '1.5rem', fontSize: '0.8rem', padding: '0.625rem 0.875rem' }}>
+            <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{demoError}</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          <hr className="divider" style={{ flex: 1 }} />
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>or connect your own</span>
+          <hr className="divider" style={{ flex: 1 }} />
+        </div>
+
+        {/* Mode toggle */}
+        <div className="tab-list" style={{ marginBottom: '1.5rem' }}>
+          <button
+            id="mode-string-btn"
+            className="tab-trigger"
+            data-active={mode === 'string'}
+            onClick={() => setMode('string')}
+          >
+            Connection String
+          </button>
+          <button
+            id="mode-manual-btn"
+            className="tab-trigger"
+            data-active={mode === 'manual'}
+            onClick={() => setMode('manual')}
+          >
+            Manual Fields
+          </button>
+        </div>
+
+        {/* String mode */}
+        {mode === 'string' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label className="label" htmlFor="conn-string-input">Connection String</label>
+              <input
+                id="conn-string-input"
+                className="input"
+                type="text"
+                placeholder="postgresql://user:pass@host:5432/dbname"
+                value={connString}
+                onChange={e => { setConnString(e.target.value); setConnStringError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleConnect()}
+                disabled={loading}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', borderColor: connStringError ? 'var(--color-error)' : undefined }}
+              />
+              {connStringError && (
+                <p style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginTop: '0.25rem' }}>{connStringError}</p>
+              )}
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: '0.375rem' }}>
+                Supports: <code>postgresql://</code> &middot; <code>mysql://</code> &middot; <code>sqlite:///</code>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Manual mode */}
+        {mode === 'manual' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+            <div>
+              <label className="label" htmlFor="db-type-select">Database Type</label>
+              <select
+                id="db-type-select"
+                className="select"
+                value={dbType}
+                onChange={e => {
+                  setDbType(e.target.value as typeof dbType);
+                  setManualErrors({});
+                }}
+              >
+                <option value="postgresql">PostgreSQL</option>
+                <option value="mysql">MySQL</option>
+                <option value="sqlite">SQLite</option>
+              </select>
+            </div>
+            {dbType !== 'sqlite' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem' }}>
+                <div>
+                  <label className="label" htmlFor="host-input">Host</label>
+                  <input
+                    id="host-input"
+                    className="input"
+                    type="text"
+                    placeholder="localhost"
+                    value={host}
+                    onChange={e => { setHost(e.target.value); setManualErrors(prev => ({ ...prev, host: undefined })); }}
+                    disabled={loading}
+                    style={{ borderColor: manualErrors.host ? 'var(--color-error)' : undefined }}
+                  />
+                  {manualErrors.host && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.host}</p>}
+                </div>
+                <div style={{ width: 90 }}>
+                  <label className="label" htmlFor="port-input">Port</label>
+                  <input
+                    id="port-input"
+                    className="input"
+                    type="text"
+                    placeholder={dbType === 'postgresql' ? '5432' : '3306'}
+                    value={port}
+                    onChange={e => { setPort(e.target.value); setManualErrors(prev => ({ ...prev, port: undefined })); }}
+                    disabled={loading}
+                    style={{ borderColor: manualErrors.port ? 'var(--color-error)' : undefined }}
+                  />
+                  {manualErrors.port && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.port}</p>}
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="label" htmlFor="database-input">{dbType === 'sqlite' ? 'File Path' : 'Database Name'}</label>
+              <input
+                id="database-input"
+                className="input"
+                type="text"
+                placeholder={dbType === 'sqlite' ? './mydb.db' : 'mydb'}
+                value={database}
+                onChange={e => { setDatabase(e.target.value); setManualErrors(prev => ({ ...prev, database: undefined })); }}
+                disabled={loading}
+                style={{ borderColor: manualErrors.database ? 'var(--color-error)' : undefined }}
+              />
+              {manualErrors.database && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.database}</p>}
+            </div>
+            {dbType !== 'sqlite' && (
+              <>
+                <div>
+                  <label className="label" htmlFor="username-input">Username</label>
+                  <input
+                    id="username-input"
+                    className="input"
+                    type="text"
+                    placeholder="postgres"
+                    value={username}
+                    onChange={e => { setUsername(e.target.value); setManualErrors(prev => ({ ...prev, username: undefined })); }}
+                    disabled={loading}
+                    style={{ borderColor: manualErrors.username ? 'var(--color-error)' : undefined }}
+                  />
+                  {manualErrors.username && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.username}</p>}
+                </div>
+                <div>
+                  <label className="label" htmlFor="password-input">Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      id="password-input"
+                      className="input"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={e => { setPassword(e.target.value); setManualErrors(prev => ({ ...prev, password: undefined })); }}
+                      onKeyDown={e => e.key === 'Enter' && handleConnect()}
+                      disabled={loading}
+                      style={{ paddingRight: '2.5rem', borderColor: manualErrors.password ? 'var(--color-error)' : undefined }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(s => !s)}
+                      style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0 }}
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  {manualErrors.password && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.password}</p>}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Global Connection Error */}
+        {error && (
+          <div className="alert alert-error animate-fade-in" style={{ marginTop: '1rem' }}>
+            <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Connect button */}
+        <button
+          id="connect-btn"
+          className="btn btn-primary"
+          onClick={handleConnect}
+          disabled={loading || demoLoading || isConnectDisabled}
+          style={{ width: '100%', marginTop: '1.25rem', height: 42 }}
+        >
+          {loading ? (
+            <>
+              <Loader2 size={15} className="animate-spin-slow" />
+              Connecting…
+            </>
+          ) : (
+            <>
+              Connect <ChevronRight size={15} />
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Footer Pill Attribution */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '2rem' }}>
+        <div 
+          className="badge badge-accent animate-fade-in" 
+          style={{ 
+            fontSize: '0.75rem', 
+            padding: '0.35rem 0.75rem', 
+            borderRadius: '999px',
+            background: 'rgba(255, 122, 89, 0.06)',
+            border: '1px solid rgba(255, 122, 89, 0.15)',
+            color: 'var(--color-accent)',
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.375rem',
+            letterSpacing: 'normal',
+            textTransform: 'none',
+          }}
+        >
+          <Zap size={11} fill="var(--color-accent)" /> Powered by Gemini &middot; Gemini
+        </div>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem', margin: 0 }}>
+          Credentials are never stored to disk &middot; Local queries only
+        </p>
+      </div>
+    </div>
+  );
+}

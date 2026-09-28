@@ -1,0 +1,48 @@
+# Credentials & Local Config
+.env
+.env.local
+frontend/.env.local
+
+# Databases
+*.db
+*.sqlite
+backend/chinook.db
+
+# Dependencies & Build Output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+build/
+.yarn/
+.pnpm-store/
+
+# Python Cache & Virtual Environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.cache
+.pytest_cache/
+.mypy_cache/
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Agent Temp Directory & Eval Results
+.agents/
+.gemini/
+eval/results_*.csv
+C:\Users\HP\.gemini\antigravity-ide\

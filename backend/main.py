@@ -1,5 +1,5 @@
 """
-main.py — QueryMind FastAPI application.
+main.py — DataPilot FastAPI application.
 
 Endpoints:
   POST /api/connect  — validate DB connection, create session, return schema overview
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("  QueryMind API starting up")
-    logger.info("  Groq model  : %s", config.GROQ_MODEL)
+    logger.info("  Groq model  : %s", config.GEMINI_MODEL)
     logger.info("  Demo DB     : %s", config.DATABASE_URL)
     logger.info("  Read-only   : %s", config.READ_ONLY_MODE)
     logger.info("  CORS origins: %s", config.ALLOWED_ORIGINS)
