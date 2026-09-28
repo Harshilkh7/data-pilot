@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_eval.py — QueryMind evaluation harness.
+run_eval.py — DataPilot evaluation harness.
 
 Runs 25 natural-language benchmark questions against the Chinook database
 and compares actual results to curated expected values (exact match with
@@ -399,7 +399,7 @@ def _compare_results(
 
 def run_eval(db_url: str, output_dir: str) -> None:
     print("\n" + "=" * 70)
-    print("  QueryMind Evaluation Harness")
+    print("  DataPilot Evaluation Harness")
     print(f"  Database: {db_url.split('@')[-1]}")
     print(f"  Questions: {len(BENCHMARK)}")
     print("=" * 70)
@@ -530,7 +530,7 @@ def run_eval(db_url: str, output_dir: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="QueryMind evaluation harness — runs benchmark against Chinook DB."
+        description="DataPilot evaluation harness — runs benchmark against Chinook DB."
     )
     parser.add_argument(
         "--db",
