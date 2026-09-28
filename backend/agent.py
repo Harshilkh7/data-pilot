@@ -35,6 +35,7 @@ from config import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
     GEMINI_API_BASE,
+    GEMINI_FALLBACK_MODELS,
     MAX_AGENT_ATTEMPTS,
     DEFAULT_ROW_LIMIT,
     ALL_ROWS_LIMIT,
@@ -52,27 +53,120 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Gemini API helper
 # ---------------------------------------------------------------------------
-def _call_gemini_with_retry(messages, model=GEMINI_MODEL, temperature=0.0, max_tokens=1024, max_retries=5):
+def _call_gemini_with_retry(messages, model=GEMINI_MODEL, temperature=0.0, max_tokens=1024, max_retries=4):
+    """
+    Call Gemini with exponential backoff and automatic model fallback.
+
+    Gemini documents 503 as a temporary capacity/availability error. We retry
+    the requested model first, then move through configured fallback models so
+    one busy model does not take down the entire query flow.
+    """
     prompt = "\n\n".join(m.get("content", "") for m in messages)
-    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}}
-    url = f"{GEMINI_API_BASE}/models/{model}:generateContent?key={GEMINI_API_KEY}"
-    delay = 2.0
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=60) as response:
-                data = json.loads(response.read().decode())
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return type("Response", (), {"choices": [type("Choice", (), {"message": type("Message", (), {"content": text})()})()]})()
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode(errors="ignore")
-            if exc.code in (429,500,502,503,504) and attempt < max_retries-1:
-                time.sleep(delay); delay=min(delay*2,12); continue
-            raise RuntimeError(f"Gemini API error {exc.code}: {body[:500]}") from exc
-        except Exception:
-            if attempt < max_retries-1:
-                time.sleep(delay); delay=min(delay*2,12); continue
-            raise
+    models = [model] + [m for m in GEMINI_FALLBACK_MODELS if m != model]
+
+    last_error = None
+
+    for candidate_model in models:
+        # Gemini 3.x no longer needs the old sampling temperature parameter.
+        # Keeping the request minimal also makes it compatible across the
+        # current stable Flash model family.
+        payload = {
+            "contents": [
+                {"role": "user", "parts": [{"text": prompt}]}
+            ],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        url = (
+            f"{GEMINI_API_BASE}/models/{candidate_model}"
+            f":generateContent?key={GEMINI_API_KEY}"
+        )
+
+        # 5, 10, 20, 40 seconds between retries.
+        delay = 5.0
+
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    "Gemini request: model=%s attempt=%d/%d",
+                    candidate_model,
+                    attempt + 1,
+                    max_retries,
+                )
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as response:
+                    data = json.loads(response.read().decode())
+
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                logger.info("Gemini request succeeded with model=%s", candidate_model)
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "choices": [
+                            type(
+                                "Choice",
+                                (),
+                                {
+                                    "message": type(
+                                        "Message",
+                                        (),
+                                        {"content": text},
+                                    )()
+                                },
+                            )()
+                        ]
+                    },
+                )()
+
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode(errors="ignore")
+                retryable = exc.code in (429, 500, 502, 503, 504)
+                last_error = RuntimeError(
+                    f"Gemini API error {exc.code}: {body[:500]}"
+                )
+
+                if retryable and attempt < max_retries - 1:
+                    logger.warning(
+                        "Gemini %s returned HTTP %d; retrying in %.0fs",
+                        candidate_model,
+                        exc.code,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    delay = min(delay * 2, 40)
+                    continue
+
+                if retryable and candidate_model != models[-1]:
+                    logger.warning(
+                        "Gemini %s exhausted after HTTP %d; trying fallback model",
+                        candidate_model,
+                        exc.code,
+                    )
+                    break
+
+                raise last_error from exc
+
+            except Exception as exc:
+                last_error = exc
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "Gemini request failed (%s); retrying in %.0fs",
+                        exc,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    delay = min(delay * 2, 40)
+                    continue
+                break
+
+    raise last_error or RuntimeError("Gemini request failed without a response")
 
 # ---------------------------------------------------------------------------
 # Agent State
