@@ -114,21 +114,10 @@ export default function ConnectionScreen({ onConnected }: Props) {
   };
 
   return (
-    <div
-      id="connection-screen"
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2rem',
-        background: 'radial-gradient(ellipse at 50% 0%, rgba(98,160,255,0.04) 0%, transparent 65%)',
-      }}
-    >
+    <div id="connection-screen" className="connection-shell">
       {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-        <div style={{
+      <div className="brand-hero">
+        <div className="brand-mark" style={{
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -141,7 +130,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
         }}>
           <Database size={28} color="var(--color-accent)" />
         </div>
-        <h1 style={{
+        <h1 className="brand-title" style={{
           fontSize: '2.25rem',
           fontWeight: 700,
           margin: 0,
@@ -152,21 +141,21 @@ export default function ConnectionScreen({ onConnected }: Props) {
         }}>
           DataPilot
         </h1>
-        <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem', fontSize: '0.95rem' }}>
+        <p className="brand-subtitle">
           Natural Language to SQL — connect your database to get started
         </p>
       </div>
 
       {/* Main card */}
-      <div className="card" style={{ width: '100%', maxWidth: 480, padding: '2rem' }}>
+      <div className="connection-card">
 
         {/* Demo button */}
         <button
           id="demo-connect-btn"
-          className="btn btn-secondary"
+          className="demo-banner"
           onClick={handleDemo}
           disabled={demoLoading || loading}
-          style={{ width: '100%', marginBottom: '1rem', justifyContent: 'center' }}
+          
         >
           {demoLoading ? (
             <Loader2 size={15} className="animate-spin-slow" />
@@ -184,14 +173,14 @@ export default function ConnectionScreen({ onConnected }: Props) {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <div className="or-divider">
           <hr className="divider" style={{ flex: 1 }} />
           <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>or connect your own</span>
           <hr className="divider" style={{ flex: 1 }} />
         </div>
 
         {/* Mode toggle */}
-        <div className="tab-list" style={{ marginBottom: '1.5rem' }}>
+        <div className="tab-list connection-tabs">
           <button
             id="mode-string-btn"
             className="tab-trigger"
@@ -357,10 +346,10 @@ export default function ConnectionScreen({ onConnected }: Props) {
         {/* Connect button */}
         <button
           id="connect-btn"
-          className="btn btn-primary"
+          className="connect-main"
           onClick={handleConnect}
           disabled={loading || demoLoading || isConnectDisabled}
-          style={{ width: '100%', marginTop: '1.25rem', height: 42 }}
+          
         >
           {loading ? (
             <>
@@ -376,7 +365,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
       </div>
 
       {/* Footer Pill Attribution */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginTop: '2rem' }}>
+      <div className="connection-footer">
         <div 
           className="badge badge-accent animate-fade-in" 
           style={{ 
