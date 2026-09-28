@@ -41,14 +41,15 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         // Render can restart the API process, which clears in-memory sessions.
         // Demo sessions are safe to recreate automatically because no credentials
         // are involved and the demo database is deterministic.
-        activeSession = await connectDemo();
+        const res = await connectDemo();
         const refreshedSession: AppSession = {
-          session_id: activeSession.session_id,
-          database_name: activeSession.database_name,
-          db_type: activeSession.db_type,
-          schema_overview: activeSession.schema_overview,
+          session_id: res.session_id,
+          database_name: res.database_name,
+          db_type: res.db_type,
+          schema_overview: res.schema_overview,
           connection_mode: 'demo',
         };
+        activeSession = refreshedSession;
         onSessionRefresh(refreshedSession);
         response = await runQuery(refreshedSession.session_id, question);
       }
