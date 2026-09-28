@@ -248,8 +248,9 @@ def get_schema_overview(session_id: str) -> list[dict]:
 
 
 def connect_from_demo() -> tuple[str, "SessionData"]:
-    """
-    Create a session using the default demo database (DATABASE_URL from config).
-    Used for the quick-start demo mode without requiring the user to provide credentials.
-    """
+    """Create a session using the self-seeding hosted demo database."""
+    from demo_db import ensure_demo_database
+
+    sqlite_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    ensure_demo_database(sqlite_path)
     return validate_and_connect(DATABASE_URL)
