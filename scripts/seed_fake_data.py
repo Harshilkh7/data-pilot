@@ -7,7 +7,7 @@ Inserts into:
   - InvoiceLine  (~100,000 rows, 2 per invoice average)
 
 This demonstrates scale/pagination handling, LIMIT injection, and performance
-of the QueryMind pipeline on large datasets.
+of the DataPilot pipeline on large datasets.
 
 Usage:
   python scripts/seed_fake_data.py
@@ -194,7 +194,7 @@ def main():
     )
     args = parser.parse_args()
 
-    print(f"QueryMind — Fake Data Seeder")
+    print(f"DataPilot — Fake Data Seeder")
     print(f"  Target DB  : {args.db.split('@')[-1]}")
     print(f"  Invoices   : {args.invoices:,}")
     print(f"  Batch size : {args.batch_size:,}")
