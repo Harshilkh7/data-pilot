@@ -1,13 +1,13 @@
 """
-agent.py — LangGraph agentic workflow for QueryMind.
+agent.py — LangGraph agentic workflow for DataPilot.
 
 Graph flow:
     retrieve_schema
-        → generate_sql        (LLM: Groq llama-3.3-70b-versatile)
+        → generate_sql        (LLM: Gemini llama-3.3-70b-versatile)
         → validate_sql        (sqlglot: parse + reject DDL/DML)
         → limit_inject        (enforce LIMIT before execution)
         → execute_sql         (read-only DB engine)
-        → summarize_results   (LLM: Groq)
+        → summarize_results   (LLM: Gemini)
         → END
 
 Retry logic:
@@ -15,7 +15,7 @@ Retry logic:
     - execute_sql failure  → back to generate_sql (with DB error in context)
     - Max MAX_AGENT_ATTEMPTS total combined retries. On exhaustion → END with error.
 
-The LLM is called directly via the Groq Python SDK (no LangChain).
+The LLM is called directly via the Gemini Python SDK (no LangChain).
 """
 
 import json
@@ -32,8 +32,9 @@ import urllib.request, urllib.error
 from langgraph.graph import StateGraph, END
 
 from config import (
-    GROQ_API_KEY,
-    GROQ_MODEL,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    GEMINI_API_BASE,
     MAX_AGENT_ATTEMPTS,
     DEFAULT_ROW_LIMIT,
     ALL_ROWS_LIMIT,
@@ -49,59 +50,29 @@ from rag import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Groq client — singleton
+# Gemini API helper
 # ---------------------------------------------------------------------------
-_gemini_client = None
-
-
-def _get_gemini():
-    global _groq_client
-    if _groq_client is None:
-        _groq_client = Groq(api_key=GROQ_API_KEY)
-    return _groq_client
-
-
 def _call_gemini_with_retry(messages, model=GEMINI_MODEL, temperature=0.0, max_tokens=1024, max_retries=5):
-    groq = _get_groq()
+    prompt = "\n\n".join(m.get("content", "") for m in messages)
+    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}}
+    url = f"{GEMINI_API_BASE}/models/{model}:generateContent?key={GEMINI_API_KEY}"
     delay = 2.0
     for attempt in range(max_retries):
         try:
-            response = groq.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return response
-        except Exception as exc:
-            exc_str = str(exc)
-            is_rate_limit = "429" in exc_str or "rate limit" in exc_str.lower()
-            if is_rate_limit and attempt < max_retries - 1:
-                # Default backoff delay
-                wait_sec = delay
-                # Parse wait seconds from message if available (e.g. "Please try again in 1m58.368s")
-                match_s = re.search(r"try again in (\d+(\.\d+)?)s", exc_str)
-                if match_s:
-                    wait_sec = float(match_s.group(1)) + 1.5
-                else:
-                    match_m = re.search(r"try again in (\d+)m(\d+(\.\d+)?)s", exc_str)
-                    if match_m:
-                        wait_sec = int(match_m.group(1)) * 60 + float(match_m.group(2)) + 1.5
-                if wait_sec > 15.0:
-                    logger.warning("Gemini rate limit wait time (%.2fs) exceeds 15s threshold. Failing fast for interactive UX.", wait_sec)
-                    raise exc
-                
-                logger.warning(
-                    "Groq rate limit hit (429). Retrying in %.2f seconds... (Attempt %d/%d)",
-                    wait_sec,
-                    attempt + 1,
-                    max_retries,
-                )
-                time.sleep(wait_sec)
-                delay *= 2
-            else:
-                raise exc
-
+            req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as response:
+                data = json.loads(response.read().decode())
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            return type("Response", (), {"choices": [type("Choice", (), {"message": type("Message", (), {"content": text})()})()]})()
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="ignore")
+            if exc.code in (429,500,502,503,504) and attempt < max_retries-1:
+                time.sleep(delay); delay=min(delay*2,12); continue
+            raise RuntimeError(f"Gemini API error {exc.code}: {body[:500]}") from exc
+        except Exception:
+            if attempt < max_retries-1:
+                time.sleep(delay); delay=min(delay*2,12); continue
+            raise
 
 # ---------------------------------------------------------------------------
 # Agent State
@@ -219,7 +190,7 @@ Schema:
 
 
 def generate_sql(state: AgentState) -> AgentState:
-    """Call Groq to generate a SQL query from the question and relevant schema."""
+    """Call Gemini to generate a SQL query from the question and relevant schema."""
     attempt = state.get("attempt_count", 0) + 1
     question = state["question"]
     schema_ddl = schema_to_sql_ddl(state["relevant_schema"])
@@ -239,7 +210,7 @@ def generate_sql(state: AgentState) -> AgentState:
                 {"role": "system", "content": _SYSTEM_PROMPT.format(schema=schema_ddl)},
                 {"role": "user", "content": user_message},
             ],
-            model=GROQ_MODEL,
+            model=GEMINI_MODEL,
             temperature=0.0,
             max_tokens=1024,
         )
@@ -435,7 +406,7 @@ _MAX_SUMMARY_ROWS = 50
 
 
 def summarize_results(state: AgentState) -> AgentState:
-    """Call Groq to produce a natural-language summary of the query results."""
+    """Call Gemini to produce a natural-language summary of the query results."""
     question = state["question"]
     columns = state.get("columns", [])
     rows = state.get("rows", [])
@@ -455,12 +426,12 @@ def summarize_results(state: AgentState) -> AgentState:
     )
 
     try:
-        response = _call_groq_with_retry(
+        response = _call_gemini_with_retry(
             messages=[
                 {"role": "system", "content": _SUMMARY_SYSTEM},
                 {"role": "user", "content": user_msg},
             ],
-            model=GROQ_MODEL,
+            model=GEMINI_MODEL,
             temperature=0.3,
             max_tokens=256,
         )
@@ -494,7 +465,7 @@ def _should_retry_or_fail(state: AgentState, phase: str) -> str:
         logger.error("%s: max attempts (%d) exhausted.", phase, MAX_AGENT_ATTEMPTS)
         # Inject a final_error so the graph ends
         state["final_error"] = (
-            f"After {MAX_AGENT_ATTEMPTS} attempts, QueryMind could not generate a valid, "
+            f"After {MAX_AGENT_ATTEMPTS} attempts, DataPilot could not generate a valid, "
             f"executable SQL query for your question.\n\n"
             f"Last attempted SQL:\n{state.get('sql', '(none)')}\n\n"
             f"Last error:\n{error}"
