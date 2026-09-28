@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { LogOut, Database } from 'lucide-react';
 import type { AppSession, QueryHistoryItem } from '../types';
-import { runQuery } from '../api';
+import { connectDemo, runQuery } from '../api';
 import { generateId } from '../lib/utils';
 import SchemaPanel from './SchemaPanel';
 import QueryInput from './QueryInput';
@@ -12,9 +12,10 @@ import SkeletonCard from './SkeletonCard';
 interface Props {
   session: AppSession;
   onDisconnect: () => void;
+  onSessionRefresh: (session: AppSession) => void;
 }
 
-export default function QueryInterface({ session, onDisconnect }: Props) {
+export default function QueryInterface({ session, onDisconnect, onSessionRefresh }: Props) {
   const [history, setHistory] = useState<QueryHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState('');
@@ -29,7 +30,29 @@ export default function QueryInterface({ session, onDisconnect }: Props) {
     setLoading(true);
     setPendingQuestion(question);
     try {
-      const response = await runQuery(session.session_id, question);
+      let activeSession = session;
+      let response;
+      try {
+        response = await runQuery(activeSession.session_id, question);
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (status !== 404 || activeSession.connection_mode !== 'demo') throw e;
+
+        // Render can restart the API process, which clears in-memory sessions.
+        // Demo sessions are safe to recreate automatically because no credentials
+        // are involved and the demo database is deterministic.
+        activeSession = await connectDemo();
+        const refreshedSession: AppSession = {
+          session_id: activeSession.session_id,
+          database_name: activeSession.database_name,
+          db_type: activeSession.db_type,
+          schema_overview: activeSession.schema_overview,
+          connection_mode: 'demo',
+        };
+        onSessionRefresh(refreshedSession);
+        response = await runQuery(refreshedSession.session_id, question);
+      }
+
       const item: QueryHistoryItem = {
         id: generateId(),
         question,
