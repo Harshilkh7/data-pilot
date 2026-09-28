@@ -9,7 +9,7 @@ def req(k):
  if not v: raise RuntimeError(f"Missing required environment variable: {k}")
  return v
 GEMINI_API_KEY=req("GEMINI_API_KEY")
-GEMINI_MODEL=os.getenv("GEMINI_MODEL","gemini-2.5-flash")
+GEMINI_MODEL=os.getenv("GEMINI_MODEL","gemini-3.8-flash")
 GEMINI_API_BASE="https://generativelanguage.googleapis.com/v1beta"
 DATABASE_URL=os.getenv("DATABASE_URL",f"sqlite:///{(ROOT/'chinook.db').resolve().as_posix()}")
 READ_ONLY_DATABASE_URL=os.getenv("READ_ONLY_DATABASE_URL") or None
