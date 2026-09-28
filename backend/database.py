@@ -1,5 +1,5 @@
 """
-database.py — Database connection management for QueryMind.
+database.py — Database connection management for DataPilot.
 
 Design principles:
   - Credentials are NEVER persisted to disk. Each session stores its SQLAlchemy
@@ -61,7 +61,7 @@ def create_read_only_role_instructions() -> str:
     SQL to run as a superuser against your Postgres database:
     -------------------------------------------------------------------------
     -- 1. Create the role (no login password set here — change as needed)
-    CREATE ROLE querymind_readonly WITH LOGIN PASSWORD 'strong_password_here';
+    CREATE ROLE datapilot_readonly WITH LOGIN PASSWORD 'strong_password_here';
 
     -- 2. Grant connection privileges on the database
     GRANT CONNECT ON DATABASE your_database_name TO querymind_readonly;
