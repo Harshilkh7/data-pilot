@@ -1,4 +1,4 @@
-// src/api.ts — API client for the QueryMind FastAPI backend
+// src/api.ts — API client for the DataPilot FastAPI backend
 /// <reference types="vite/client" />
 import axios from 'axios';
 import type { ConnectResponse, QueryResponse } from './types';
