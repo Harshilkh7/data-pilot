@@ -1,8 +1,8 @@
-// src/components/ConnectionScreen.tsx
 import { useState } from 'react';
-import { Database, Zap, ChevronRight, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { Zap, ChevronRight, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import type { AppSession, ConnectionMode } from '../types';
 import { connectWithString, connectManual, connectDemo } from '../api';
+import BrandMark from './BrandMark';
 
 interface Props {
   onConnected: (session: AppSession) => void;
@@ -16,11 +16,9 @@ export default function ConnectionScreen({ onConnected }: Props) {
   const [demoError, setDemoError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // String mode
   const [connString, setConnString] = useState('');
   const [connStringError, setConnStringError] = useState('');
 
-  // Manual mode
   const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'sqlite'>('postgresql');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('');
@@ -35,7 +33,6 @@ export default function ConnectionScreen({ onConnected }: Props) {
     password?: string;
   }>({});
 
-  // Real-time button disabling validation
   const isConnectDisabled = mode === 'string'
     ? !connString.trim()
     : dbType === 'sqlite'
@@ -65,23 +62,22 @@ export default function ConnectionScreen({ onConnected }: Props) {
   };
 
   const handleConnect = async () => {
-    // Validate
     if (mode === 'string') {
       if (!connString.trim()) {
-        setConnStringError('Connection string is required.');
+        setConnStringError('Database URL is required.');
         return;
       }
       setConnStringError('');
     } else {
       const newErrors: typeof manualErrors = {};
       if (dbType === 'sqlite') {
-        if (!database.trim()) newErrors.database = 'File path is required.';
+        if (!database.trim()) newErrors.database = 'SQLite file location is required.';
       } else {
-        if (!host.trim()) newErrors.host = 'Host is required.';
+        if (!host.trim()) newErrors.host = 'Server address is required.';
         if (!port.trim()) newErrors.port = 'Port is required.';
-        if (!database.trim()) newErrors.database = 'Database name is required.';
-        if (!username.trim()) newErrors.username = 'Username is required.';
-        if (!password.trim()) newErrors.password = 'Password is required.';
+        if (!database.trim()) newErrors.database = 'Dataset name is required.';
+        if (!username.trim()) newErrors.username = 'Account name is required.';
+        if (!password.trim()) newErrors.password = 'Access key is required.';
       }
       if (Object.keys(newErrors).length > 0) {
         setManualErrors(newErrors);
@@ -108,7 +104,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
       });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? (e instanceof Error ? e.message : 'Connection failed');
+        ?? (e instanceof Error ? e.message : 'Could not open the data source');
       setError(msg);
     } finally {
       setLoading(false);
@@ -117,57 +113,27 @@ export default function ConnectionScreen({ onConnected }: Props) {
 
   return (
     <div id="connection-screen" className="connection-shell">
-      {/* Header */}
       <div className="brand-hero">
-        <div className="brand-mark" style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 56,
-          height: 56,
-          borderRadius: 14,
-          background: 'var(--color-accent-muted)',
-          border: '1px solid rgba(98,160,255,0.25)',
-          marginBottom: '1.25rem',
-        }}>
-          <Database size={28} color="var(--color-accent)" />
+        <div className="brand-mark">
+          <BrandMark size={58} />
         </div>
-        <h1 className="brand-title" style={{
-          fontSize: '2.25rem',
-          fontWeight: 700,
-          margin: 0,
-          background: 'linear-gradient(135deg, #f5f5f7 0%, #a1a1aa 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          letterSpacing: '-0.02em',
-        }}>
-          DataPilot
-        </h1>
+        <h1 className="brand-title">DataPilot</h1>
         <p className="brand-subtitle">
-          Natural Language to SQL — connect your database to get started
+          Ask questions in plain English. Get answers from your SQL data.
         </p>
       </div>
 
-      {/* Main card */}
       <div className="connection-card">
-
-        {/* Demo button */}
         <button
           id="demo-connect-btn"
           className="demo-banner"
           onClick={handleDemo}
           disabled={demoLoading || loading}
-          
         >
-          {demoLoading ? (
-            <Loader2 size={15} className="animate-spin-slow" />
-          ) : (
-            <Zap size={15} />
-          )}
-          {demoLoading ? 'Connecting to demo…' : 'Try Demo (Chinook DB)'}
+          {demoLoading ? <Loader2 size={15} className="animate-spin-slow" /> : <Zap size={15} />}
+          {demoLoading ? 'Preparing sample workspace…' : 'Explore sample shop data'}
         </button>
 
-        {/* Demo Connection Error */}
         {demoError && (
           <div className="alert alert-error animate-fade-in" style={{ marginBottom: '1.5rem', fontSize: '0.8rem', padding: '0.625rem 0.875rem' }}>
             <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -177,11 +143,10 @@ export default function ConnectionScreen({ onConnected }: Props) {
 
         <div className="or-divider">
           <hr className="divider" style={{ flex: 1 }} />
-          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>or connect your own</span>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>or use your database</span>
           <hr className="divider" style={{ flex: 1 }} />
         </div>
 
-        {/* Mode toggle */}
         <div className="tab-list connection-tabs">
           <button
             id="mode-string-btn"
@@ -189,7 +154,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
             data-active={mode === 'string'}
             onClick={() => setMode('string')}
           >
-            Connection String
+            Database URL
           </button>
           <button
             id="mode-manual-btn"
@@ -197,20 +162,19 @@ export default function ConnectionScreen({ onConnected }: Props) {
             data-active={mode === 'manual'}
             onClick={() => setMode('manual')}
           >
-            Manual Fields
+            Direct setup
           </button>
         </div>
 
-        {/* String mode */}
         {mode === 'string' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label className="label" htmlFor="conn-string-input">Connection String</label>
+              <label className="label" htmlFor="conn-string-input">Database URL</label>
               <input
                 id="conn-string-input"
                 className="input"
                 type="text"
-                placeholder="postgresql://user:pass@host:5432/dbname"
+                placeholder="postgresql://user:pass@host:5432/database"
                 value={connString}
                 onChange={e => { setConnString(e.target.value); setConnStringError(''); }}
                 onKeyDown={e => e.key === 'Enter' && handleConnect()}
@@ -221,17 +185,16 @@ export default function ConnectionScreen({ onConnected }: Props) {
                 <p style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginTop: '0.25rem' }}>{connStringError}</p>
               )}
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', marginTop: '0.375rem' }}>
-                Supports: <code>postgresql://</code> &middot; <code>mysql://</code> &middot; <code>sqlite:///</code>
+                PostgreSQL · MySQL · SQLite
               </p>
             </div>
           </div>
         )}
 
-        {/* Manual mode */}
         {mode === 'manual' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
             <div>
-              <label className="label" htmlFor="db-type-select">Database Type</label>
+              <label className="label" htmlFor="db-type-select">Engine</label>
               <select
                 id="db-type-select"
                 className="select"
@@ -246,15 +209,16 @@ export default function ConnectionScreen({ onConnected }: Props) {
                 <option value="sqlite">SQLite</option>
               </select>
             </div>
+
             {dbType !== 'sqlite' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem' }}>
                 <div>
-                  <label className="label" htmlFor="host-input">Host</label>
+                  <label className="label" htmlFor="host-input">Server</label>
                   <input
                     id="host-input"
                     className="input"
                     type="text"
-                    placeholder="localhost"
+                    placeholder="db.example.com"
                     value={host}
                     onChange={e => { setHost(e.target.value); setManualErrors(prev => ({ ...prev, host: undefined })); }}
                     disabled={loading}
@@ -278,13 +242,14 @@ export default function ConnectionScreen({ onConnected }: Props) {
                 </div>
               </div>
             )}
+
             <div>
-              <label className="label" htmlFor="database-input">{dbType === 'sqlite' ? 'File Path' : 'Database Name'}</label>
+              <label className="label" htmlFor="database-input">{dbType === 'sqlite' ? 'SQLite file' : 'Dataset'}</label>
               <input
                 id="database-input"
                 className="input"
                 type="text"
-                placeholder={dbType === 'sqlite' ? './mydb.db' : 'mydb'}
+                placeholder={dbType === 'sqlite' ? './analytics.db' : 'commerce'}
                 value={database}
                 onChange={e => { setDatabase(e.target.value); setManualErrors(prev => ({ ...prev, database: undefined })); }}
                 disabled={loading}
@@ -292,15 +257,16 @@ export default function ConnectionScreen({ onConnected }: Props) {
               />
               {manualErrors.database && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.database}</p>}
             </div>
+
             {dbType !== 'sqlite' && (
               <>
                 <div>
-                  <label className="label" htmlFor="username-input">Username</label>
+                  <label className="label" htmlFor="username-input">Account</label>
                   <input
                     id="username-input"
                     className="input"
                     type="text"
-                    placeholder="postgres"
+                    placeholder="analytics_user"
                     value={username}
                     onChange={e => { setUsername(e.target.value); setManualErrors(prev => ({ ...prev, username: undefined })); }}
                     disabled={loading}
@@ -309,7 +275,7 @@ export default function ConnectionScreen({ onConnected }: Props) {
                   {manualErrors.username && <p style={{ color: 'var(--color-error)', fontSize: '0.7rem', marginTop: '0.2rem' }}>{manualErrors.username}</p>}
                 </div>
                 <div>
-                  <label className="label" htmlFor="password-input">Password</label>
+                  <label className="label" htmlFor="password-input">Access key</label>
                   <div style={{ position: 'relative' }}>
                     <input
                       id="password-input"
@@ -337,7 +303,6 @@ export default function ConnectionScreen({ onConnected }: Props) {
           </div>
         )}
 
-        {/* Global Connection Error */}
         {error && (
           <div className="alert alert-error animate-fade-in" style={{ marginTop: '1rem' }}>
             <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -345,37 +310,34 @@ export default function ConnectionScreen({ onConnected }: Props) {
           </div>
         )}
 
-        {/* Connect button */}
         <button
           id="connect-btn"
           className="connect-main"
           onClick={handleConnect}
           disabled={loading || demoLoading || isConnectDisabled}
-          
         >
           {loading ? (
             <>
               <Loader2 size={15} className="animate-spin-slow" />
-              Connecting…
+              Opening workspace…
             </>
           ) : (
             <>
-              Connect <ChevronRight size={15} />
+              Open workspace <ChevronRight size={15} />
             </>
           )}
         </button>
       </div>
 
-      {/* Footer Pill Attribution */}
       <div className="connection-footer">
-        <div 
-          className="badge badge-accent animate-fade-in" 
-          style={{ 
-            fontSize: '0.75rem', 
-            padding: '0.35rem 0.75rem', 
+        <div
+          className="badge badge-accent animate-fade-in"
+          style={{
+            fontSize: '0.75rem',
+            padding: '0.35rem 0.75rem',
             borderRadius: '999px',
-            background: 'rgba(255, 122, 89, 0.06)',
-            border: '1px solid rgba(255, 122, 89, 0.15)',
+            background: 'rgba(139,92,246,.06)',
+            border: '1px solid rgba(139,92,246,.15)',
             color: 'var(--color-accent)',
             fontWeight: 500,
             display: 'inline-flex',
@@ -385,10 +347,10 @@ export default function ConnectionScreen({ onConnected }: Props) {
             textTransform: 'none',
           }}
         >
-          <Zap size={11} fill="var(--color-accent)" /> Powered by Gemini &middot; Gemini
+          <Zap size={11} fill="var(--color-accent)" /> Gemini-assisted analysis
         </div>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem', margin: 0 }}>
-          Credentials are never stored to disk &middot; Local queries only
+          Connection secrets stay in memory only · Queries are read-only
         </p>
       </div>
     </div>
