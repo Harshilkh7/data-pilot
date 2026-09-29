@@ -3,6 +3,7 @@ import cors from "cors";
 import { PORT, ALLOWED_ORIGINS, GEMINI_MODEL, DATABASE_URL, READ_ONLY_MODE, GEMINI_API_KEY } from "./config.js";
 import { validateAndConnect, connectFromDemo, getSession, removeSession, schemaOverview, SESSION_STORE } from "./database.js";
 import { answerQuestion } from "./agent.js";
+import { indexSchema, removeSchemaIndex } from "./rag.js";
 
 const app = express();
 app.use(cors({
@@ -29,12 +30,14 @@ async function connectHandler(req, res) {
     }
     if (!connectionString) return res.status(400).json({ detail: "Provide either connection_string or structured database fields." });
     const [sessionId, session] = await validateAndConnect(connectionString, body.read_only_connection_string);
+    const rag = await indexSchema(sessionId);
     const overview = await schemaOverview(session);
     res.json({
       session_id: sessionId,
       database_name: session.runtime.name,
       db_type: session.runtime.type,
       schema_overview: overview,
+      rag: { indexed_tables: rag.indexed, provider: rag.provider },
       message: `Connected to '${session.runtime.name}' (${session.tableNames.length} tables).`
     });
   } catch (err) {
@@ -77,6 +80,7 @@ app.post("/api/query", async (req, res) => {
 
 app.delete("/api/session/:sessionId", async (req, res) => {
   if (!SESSION_STORE.has(req.params.sessionId)) return res.status(404).json({ detail: "Session not found." });
+  await removeSchemaIndex(req.params.sessionId);
   await removeSession(req.params.sessionId);
   res.json({ message: `Session '${req.params.sessionId}' disconnected.` });
 });
