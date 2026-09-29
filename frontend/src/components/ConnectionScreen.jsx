@@ -42,7 +42,7 @@ export default function ConnectionScreen({ onConnected }) {
         connection_mode: 'demo',
       });
     } catch (e) {
-      const msg = (e as { response?: { data?: { detail? } } })?.response?.data?.detail
+      const msg = (e)?.response?.data?.detail
         ?? (e instanceof Error ? e.message : 'Demo connection failed');
       setDemoError(msg);
     } finally {
@@ -92,7 +92,7 @@ export default function ConnectionScreen({ onConnected }) {
         connection_mode: 'custom',
       });
     } catch (e) {
-      const msg = (e as { response?: { data?: { detail? } } })?.response?.data?.detail
+      const msg = (e)?.response?.data?.detail
         ?? (e instanceof Error ? e.message : 'Could not open the data source');
       setError(msg);
     } finally {
