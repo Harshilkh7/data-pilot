@@ -80,7 +80,8 @@ async function introspect(runtime) {
     const schemas = [];
     for (const table of tables) {
       const cols = runtime.primary.prepare("PRAGMA table_info(" + quoteIdent(table, "sqlite") + ")").all();
-      schemas.push({ table, columns: cols.map(c => ({ name: c.name, type: c.type || "TEXT" })) });
+      const fks = runtime.primary.prepare("PRAGMA foreign_key_list(" + quoteIdent(table, "sqlite") + ")").all();
+      schemas.push({ table, columns: cols.map(c => ({ name: c.name, type: c.type || "TEXT", nullable: !c.notnull, primary_key: Boolean(c.pk) })), foreign_keys: fks.map(f => ({ column: f.from, references_table: f.table, references_column: f.to })) });
     }
     return schemas;
   }
@@ -89,7 +90,7 @@ async function introspect(runtime) {
     const schemas = [];
     for (const r of rows) {
       const c = await runtime.primary.query(`SELECT column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`, [r.table_name]);
-      schemas.push({ table: r.table_name, columns: c.rows.map(x => ({ name: x.column_name, type: x.data_type })) });
+      schemas.push({ table: r.table_name, columns: c.rows.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: false })), foreign_keys: [] });
     }
     return schemas;
   }
@@ -98,16 +99,21 @@ async function introspect(runtime) {
   const schemas = [];
   for (const r of tables) {
     const [c] = await runtime.primary.query("SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=? AND table_name=? ORDER BY ordinal_position", [db, r.table_name]);
-    schemas.push({ table: r.table_name, columns: c.map(x => ({ name: x.column_name, type: x.data_type })) });
+    schemas.push({ table: r.table_name, columns: c.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: x.column_key === "PRI" })), foreign_keys: [] });
   }
   return schemas;
 }
 
 export async function validateAndConnect(connectionString, readOnlyConnectionString) {
   const runtime = await createRuntime(connectionString, READ_ONLY_MODE ? (readOnlyConnectionString || READ_ONLY_DATABASE_URL) : readOnlyConnectionString);
-  const schemas = await introspect(runtime);
+  const rawSchemas = await introspect(runtime);
+  const schemas = rawSchemas.map(s => ({
+    name: s.name || s.table,
+    columns: (s.columns || []).map(c => ({ name: c.name, type: c.type || "TEXT", nullable: c.nullable !== false, primary_key: Boolean(c.primary_key) })),
+    foreign_keys: s.foreign_keys || [],
+  }));
   const sessionId = crypto.randomUUID();
-  const session = { sessionId, runtime, tableNames: schemas.map(s => s.table), schemas };
+  const session = { sessionId, runtime, tableNames: schemas.map(s => s.name), schemas };
   SESSION_STORE.set(sessionId, session);
   return [sessionId, session];
 }
