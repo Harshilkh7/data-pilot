@@ -1,70 +1,47 @@
-import axios from 'axios';
+import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? '';
-
+const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 const client = axios.create({
   baseURL: BASE_URL,
-  timeout: 120_000, // 2 minutes — LLM + DB can be slow
-  headers: { 'Content-Type': 'application/json' },
+  timeout: 120000,
+  headers: {"Content-Type":"application/json"}
 });
 
-// ─── Connection ────────────────────────────────────────────────────────────
-
-export async function connectWithString(
-  connectionString: string,
-  readOnlyConnectionString?: string,
-): Promise {
-  const res = await client.post('/api/connect', {
+export async function connectWithString(connectionString, readOnlyConnectionString) {
+  const res = await client.post("/api/connect", {
     connection_string: connectionString,
-    read_only_connection_string: readOnlyConnectionString || undefined,
+    read_only_connection_string: readOnlyConnectionString || undefined
   });
   return res.data;
 }
 
-export async function connectManual(fields: {
-  db_type: string;
-  host: string;
-  port: string;
-  database: string;
-  username: string;
-  password: string;
-}): Promise {
-  const res = await client.post('/api/connect', {
+export async function connectManual(fields) {
+  const res = await client.post("/api/connect", {
     db_type: fields.db_type,
     host: fields.host,
-    port: parseInt(fields.port) || undefined,
+    port: parseInt(fields.port, 10) || undefined,
     database: fields.database,
     username: fields.username || undefined,
-    password: fields.password || undefined,
+    password: fields.password || undefined
   });
   return res.data;
 }
 
-export async function connectDemo(): Promise {
-  const res = await client.post('/api/demo-connect');
+export async function connectDemo() {
+  const res = await client.post("/api/demo-connect");
   return res.data;
 }
 
-export async function disconnectSession(sessionId: string): Promise<void> {
+export async function disconnectSession(sessionId) {
   await client.delete(`/api/session/${sessionId}`);
 }
 
-// ─── Query ────────────────────────────────────────────────────────────────
-
-export async function runQuery(
-  sessionId: string,
-  question: string,
-): Promise {
-  const res = await client.post('/api/query', {
-    session_id: sessionId,
-    question,
-  });
+export async function runQuery(sessionId, question) {
+  const res = await client.post("/api/query", {session_id: sessionId, question});
   return res.data;
 }
 
-// ─── Health ───────────────────────────────────────────────────────────────
-
-export async function getHealth(): Promise<{ status: string }> {
-  const res = await client.get<{ status: string }>('/api/health');
+export async function getHealth() {
+  const res = await client.get("/api/health");
   return res.data;
 }
