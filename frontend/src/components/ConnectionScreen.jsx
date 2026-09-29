@@ -3,7 +3,7 @@ import { Zap, ChevronRight, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-rea
 import { connectWithString, connectManual, connectDemo } from '../api';
 import BrandMark from './BrandMark';
 
-export default function ConnectionScreen({ onConnected }: Props) {
+export default function ConnectionScreen({ onConnected }) {
   const [mode, setMode] = useState('string');
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
