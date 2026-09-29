@@ -4,7 +4,7 @@ import QueryInterface from './components/QueryInterface';
 import { disconnectSession } from './api';
 
 export default function App() {
-  const [session, setSession] = useState<null>(null);
+  const [session, setSession] = useState(null);
 
   const disconnect = async () => {
     if (session) {
