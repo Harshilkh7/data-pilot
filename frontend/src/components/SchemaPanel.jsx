@@ -9,7 +9,7 @@ export default function SchemaPanel({ databaseName, dbType, tables, sessionId })
     if (sessionId) setOpen(true);
   }, [sessionId]);
 
-  const dbTypeIcon:  = {
+  const dbTypeIcon = {
     postgresql: '🐘',
     mysql: '🐬',
     sqlite: '◈',
