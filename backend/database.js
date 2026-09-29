@@ -47,7 +47,7 @@ async function createRuntime(connectionString, readOnlyConnectionString) {
       type: "sqlite", name: databaseName(parsed), primary: db, readonly: db,
       async test() { db.prepare("SELECT 1").get(); },
       async close() { db.close(); },
-      async query(sql) { return { columns: [], rows: db.prepare(sql).all() }; }
+      async query(sql) { const stmt = db.prepare(sql); return { columns: stmt.columns().map(c => c.name), rows: stmt.all() }; }
     };
   }
 
