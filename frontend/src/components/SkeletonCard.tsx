@@ -25,7 +25,7 @@ export default function SkeletonCard({ question }: { question: string }) {
         <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 500, color: 'var(--color-text-primary)', flex: 1 }}>
           {question}
         </p>
-        <span className="badge badge-warning">Processing…</span>
+        <span className="badge badge-warning">Working…</span>
       </div>
 
       <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -69,7 +69,7 @@ export default function SkeletonCard({ question }: { question: string }) {
             }}
           />
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-            Generating SQL and fetching results…
+            Building the analysis and reading the data…
           </span>
         </div>
       </div>
