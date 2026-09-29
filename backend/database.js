@@ -70,7 +70,7 @@ async function createRuntime(connectionString, readOnlyConnectionString) {
     type: "mysql", name: databaseName(parsed), primary: pool, readonly: ro,
     async test() { await pool.query("SELECT 1"); },
     async close() { await pool.end(); if (ro !== pool) await ro.end(); },
-    async query(sql) { const [rows] = await ro.query(sql); return { columns: rows.length ? Object.keys(rows[0]) : []; rows }; }
+    async query(sql) { const [rows] = await ro.query(sql); return { columns: rows.length ? Object.keys(rows[0]) : [], rows }; }
   };
 }
 
