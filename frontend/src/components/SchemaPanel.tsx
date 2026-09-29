@@ -1,4 +1,3 @@
-// src/components/SchemaPanel.tsx — collapsible schema overview sidebar
 import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Table2, Hash } from 'lucide-react';
 import type { SchemaTable } from '../types';
@@ -15,20 +14,17 @@ export default function SchemaPanel({ databaseName, dbType, tables, sessionId }:
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (sessionId) {
-      setOpen(true);
-    }
+    if (sessionId) setOpen(true);
   }, [sessionId]);
 
   const dbTypeIcon: Record<string, string> = {
     postgresql: '🐘',
     mysql: '🐬',
-    sqlite: '💾',
+    sqlite: '◈',
   };
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      {/* Header */}
       <button
         id="schema-panel-toggle"
         onClick={() => setOpen(o => !o)}
@@ -46,14 +42,13 @@ export default function SchemaPanel({ databaseName, dbType, tables, sessionId }:
       >
         {open ? <ChevronDown size={14} color="var(--color-text-muted)" /> : <ChevronRight size={14} color="var(--color-text-muted)" />}
         <span style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-          Schema
+          Data model
         </span>
         <span style={{ fontSize: '0.75rem', marginLeft: 'auto', color: 'var(--color-text-muted)' }}>
-          {dbTypeIcon[dbType] ?? '🗄️'} {databaseName} · {tables.length} tables
+          {dbTypeIcon[dbType] ?? '◈'} {databaseName} · {tables.length} entities
         </span>
       </button>
 
-      {/* Table list */}
       {open && (
         <div style={{
           borderTop: '1px solid var(--color-border-subtle)',
@@ -71,7 +66,7 @@ export default function SchemaPanel({ databaseName, dbType, tables, sessionId }:
                 padding: '0.375rem 1rem',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#141414')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,.06)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <Table2 size={12} color="var(--color-accent)" />
@@ -80,7 +75,7 @@ export default function SchemaPanel({ databaseName, dbType, tables, sessionId }:
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
                 <Hash size={9} />
-                {t.row_count >= 0 ? formatNumber(t.row_count) : '—'}
+                {t.row_count >= 0 ? formatNumber(t.row_count) : '—'} rows
               </span>
             </div>
           ))}
