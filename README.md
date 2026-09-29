@@ -1,566 +1,192 @@
-# DataPilot
+# DataPilot — AI-Powered SQL Analytics
 
-> **Talk to your database in plain English.**
+DataPilot is a full-stack conversational analytics platform that lets users ask questions about relational databases in plain English and receive safe, executable SQL, structured results, and concise explanations.
 
-DataPilot is an AI-powered natural-language data analyst that lets users connect a PostgreSQL, MySQL, or SQLite database and ask questions in everyday language. Instead of manually writing SQL, the user asks a question, DataPilot retrieves the relevant schema, generates SQL with Google Gemini, validates it, enforces a safe row limit, executes it through a read-only database engine, and returns the result as a table, concise explanation, and optional chart suggestion.
+**Current stack:** React + JavaScript + Vite on the frontend, Node.js + Express + JavaScript on the backend, Gemini for SQL generation/summarization, and PostgreSQL/MySQL/SQLite database support.
 
-**Live application:** https://datapilot-frontend-ojbo.onrender.com  
-**Backend API:** https://datapilot-api-7a8n.onrender.com  
-**Repository:** https://github.com/Harshilkh7/data-pilot
+- **Live app:** https://datapilot-frontend-ojbo.onrender.com/
+- **Node API:** https://datapilot-api-node.onrender.com/
+- **Repository:** https://github.com/Harshilkh7/data-pilot
 
----
+> The hosted Node API needs `GEMINI_API_KEY` configured in Render before AI queries can run. The API health and demo database endpoints do not require the key.
 
 ## Why DataPilot?
 
-Traditional analytics tools often require users to:
+Traditional SQL analytics requires users to know table names, joins, filters, grouping, and SQL syntax. DataPilot adds a conversational layer while keeping database execution behind explicit read-only guardrails.
 
-1. Understand the database schema.
-2. Know SQL.
-3. Write joins and aggregations manually.
-4. Debug SQL errors.
-5. Interpret raw query results.
+The application is designed around five steps:
 
-DataPilot removes that friction.
+1. **Connect** — connect a PostgreSQL, MySQL, or SQLite database, or open the seeded e-commerce demo.
+2. **Understand** — inspect tables and columns and select the most relevant schema context for the question.
+3. **Generate** — Gemini converts the natural-language request into a single SQL SELECT query.
+4. **Protect + Execute** — the query is checked for read-only behavior, bounded with a row limit, then executed against the connected database.
+5. **Explain** — results are returned as rows with an optional visualization and a concise natural-language summary.
 
-A user can ask:
-
-> "What were the top 10 products by revenue?"
-
-and receive:
-
-- the generated SQL,
-- the query result,
-- a natural-language summary,
-- and a chart suggestion when the result is suitable for visualization.
-
-The goal is not to hide SQL completely. DataPilot exposes the generated SQL so users can understand, verify, and reuse what the system generated.
-
----
-
-# Core Features
-
-- **Natural-language to SQL**
-- **PostgreSQL, MySQL, and SQLite support**
-- **Credential-free e-commerce demo**
-- **Automatic database schema inspection**
-- **Schema-aware SQL generation**
-- **Semantic schema retrieval with RAG**
-- **Gemini-powered SQL generation and result summarization**
-- **SQL validation with sqlglot**
-- **SELECT-only execution**
-- **Automatic query row limits**
-- **Dedicated read-only execution engine support**
-- **Automatic SQL correction after validation/database errors**
-- **Result tables**
-- **Automatic chart suggestions**
-- **Responsive React UI**
-- **Hosted on Render**
-- **Session recovery for the hosted demo**
-
----
-
-# Architecture
+## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                         React + Vite Frontend                       │
-│                                                                     │
-│  Connection Screen  ──→  Analytics Workspace  ──→  Results/Charts │
-└───────────────────────────────┬─────────────────────────────────────┘
-                                │ HTTP / JSON
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         FastAPI Backend                              │
-│                                                                     │
-│  /api/connect       /api/demo-connect       /api/query             │
-│         │                    │                    │                  │
-│         └────────────────────┴────────────────────┘                  │
-│                              │                                      │
-│                              ▼                                      │
-│                     Session + DB Manager                            │
-│                              │                                      │
-│                              ▼                                      │
-│                    Schema Extraction / RAG                          │
-│                              │                                      │
-│                              ▼                                      │
-│                       LangGraph Agent                               │
-│                              │                                      │
-│            ┌─────────────────┼──────────────────┐                   │
-│            ▼                 ▼                  ▼                   │
-│       Gemini SQL        sqlglot validation   SQL execution           │
-│            │                 │                  │                   │
-│            └──────────── retry/correction ─────┘                   │
-│                              │                                      │
-│                              ▼                                      │
-│                    Gemini result summary                            │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │
-                               ▼
-                   PostgreSQL / MySQL / SQLite
+┌──────────────────── React + JavaScript ────────────────────┐
+│ Connection screen → Query workspace → Rows / Visual / SQL │
+└───────────────────────────┬────────────────────────────────┘
+                            │ HTTP/JSON
+                            ▼
+┌──────────────────── Node.js + Express ─────────────────────┐
+│ /api/connect       /api/demo-connect                       │
+│ /api/query         /api/session/:id                        │
+│                                                           │
+│ Session manager → Schema retrieval → Gemini → Guardrails  │
+│                                      ↓                    │
+│                              Database execution            │
+└───────────────┬──────────────────┬─────────────────────────┘
+                │                  │
+                ▼                  ▼
+        PostgreSQL / MySQL       SQLite
+                                  │
+                                  ▼
+                           E-commerce demo DB
 ```
 
----
+## Query pipeline
 
-# End-to-End Workflow
-
-DataPilot processes a query through several controlled stages.
-
-## 1. Connect to a database
-
-The user can either:
-
-- enter a full SQLAlchemy connection string, or
-- provide database type, host, port, database name, username, and password.
-
-Supported database types:
-
-- PostgreSQL
-- MySQL
-- SQLite
-
-For the hosted demo, no credentials are required. The **Try Demo** button connects to a deterministic e-commerce SQLite database.
-
----
-
-## 2. Create an application session
-
-After a successful connection, the backend creates a UUID session.
-
-The session contains runtime information such as:
-
-- SQLAlchemy engine
-- read-only engine
-- database type
-- database name
-- discovered table names
-
-Database credentials are not persisted to disk.
-
-The current session store is intentionally in-memory:
-
-```python
-SESSION_STORE: dict[str, SessionData] = {}
-```
-
-This means custom sessions disappear when the backend process restarts. The hosted demo can safely reconnect automatically because its database requires no user credentials.
-
----
-
-## 3. Inspect the database schema
-
-DataPilot uses SQLAlchemy's inspector to discover:
-
-- tables
-- columns
-- data types
-- primary keys
-- foreign keys
-
-For example:
+A query follows this flow:
 
 ```text
-orders
-├── order_id          INTEGER PK
-├── customer_id       INTEGER FK → customers.customer_id
-├── order_date        TEXT
-├── status            TEXT
-├── subtotal           REAL
-├── discount           REAL
-└── total_amount       REAL
-
-order_items
-├── order_item_id     INTEGER PK
-├── order_id          INTEGER FK → orders.order_id
-├── product_id        INTEGER FK → products.product_id
-├── quantity          INTEGER
-└── item_total        REAL
-```
-
-The schema is then available to the query pipeline.
-
----
-
-# RAG / Schema Retrieval
-
-Large databases can contain hundreds or thousands of tables. Sending the entire schema to the LLM for every question is inefficient and increases prompt size.
-
-DataPilot therefore includes a schema-retrieval layer.
-
-## How it works
-
-### Step 1 — Describe tables
-
-Each table is converted into a compact natural-language description containing:
-
-- table name
-- columns
-- data types
-- primary keys
-- foreign keys
-
-### Step 2 — Generate embeddings
-
-The table descriptions are embedded using Google's Gemini embedding model.
-
-### Step 3 — Store embeddings
-
-Embeddings are stored in an in-process ChromaDB collection associated with the session.
-
-### Step 4 — Retrieve relevant tables
-
-When the user asks a question, the question is embedded and compared with the schema embeddings.
-
-The most relevant tables are selected.
-
-### Small-database optimization
-
-If the database contains at most `RAG_SKIP_THRESHOLD` tables, DataPilot skips semantic retrieval and sends the full schema to the agent. This avoids unnecessary embedding work for small databases.
-
----
-
-# AI Query Pipeline
-
-The core query workflow is implemented as a LangGraph state graph.
-
-```text
-                 ┌─────────────────┐
-                 │ retrieve_schema │
-                 └────────┬────────┘
-                          ▼
-                 ┌─────────────────┐
-                 │  generate_sql   │◄──────────────┐
-                 └────────┬────────┘               │
-                          ▼                        │
-                 ┌─────────────────┐               │
-                 │  validate_sql   │───────────────┤
-                 └────────┬────────┘               │
-                          ▼                        │
-                 ┌─────────────────┐               │
-                 │  limit_inject   │               │
-                 └────────┬────────┘               │
-                          ▼                        │
-                 ┌─────────────────┐               │
-                 │   execute_sql   │───────────────┤
-                 └────────┬────────┘               │
-                          ▼                        │
-                 ┌────────────────────┐             │
-                 │ summarize_results  │             │
-                 └─────────┬──────────┘             │
-                           ▼                        │
-                          END                       │
-                                                     │
-                    validation / DB errors ──────────┘
-```
-
-## Stage 1 — Schema retrieval
-
-The question is used to identify the relevant database tables.
-
-Example:
-
-```text
-Question:
-"Which product category generated the most revenue?"
-```
-
-Relevant tables might include:
-
-```text
-categories
-products
-order_items
-orders
-```
-
----
-
-## Stage 2 — SQL generation
-
-Gemini receives:
-
-- the user's question,
-- the relevant schema,
-- primary-key information,
-- foreign-key relationships,
-- SQL generation rules,
-- and any error from a previous attempt.
-
-The model is instructed to output only a SQL query.
-
-Example:
-
-```sql
-SELECT
-    c.category_name,
-    SUM(oi.item_total) AS revenue
-FROM categories c
-JOIN products p ON p.category_id = c.category_id
-JOIN order_items oi ON oi.product_id = p.product_id
-JOIN orders o ON o.order_id = oi.order_id
-WHERE o.status != 'cancelled'
-GROUP BY c.category_name
-ORDER BY revenue DESC
-LIMIT 1;
-```
-
----
-
-# SQL Safety Layer
-
-AI-generated SQL should never be executed blindly.
-
-DataPilot therefore validates every generated query before execution.
-
-## sqlglot parsing
-
-The generated SQL is parsed using **sqlglot**.
-
-The system rejects statements that are not SELECT statements.
-
-Forbidden operations include:
-
-```text
-INSERT
-UPDATE
-DELETE
-DROP
-ALTER
-CREATE
-TRUNCATE
-REPLACE
-MERGE
-UPSERT
-GRANT
-REVOKE
-```
-
-This gives the AI an explicit read-only boundary.
-
----
-
-## Automatic row limits
-
-DataPilot also prevents completely unbounded result sets.
-
-Default behavior:
-
-```text
-Normal query       → maximum 500 rows
-"all/every/export" → maximum 10,000 rows
-```
-
-If Gemini generates:
-
-```sql
-SELECT * FROM orders;
-```
-
-DataPilot can transform it into:
-
-```sql
-SELECT * FROM orders LIMIT 500;
-```
-
-The API also returns a human-readable `limit_note` explaining when the system applied a limit.
-
----
-
-# Self-Correction Loop
-
-The query pipeline can recover from common AI-generated SQL errors.
-
-For example:
-
-```text
+User question
+    ↓
+Load active database session
+    ↓
+Read database schema
+    ↓
+Select relevant tables/columns
+    ↓
 Gemini generates SQL
-       ↓
-sqlglot validation
-       ↓
-invalid SQL
-       ↓
-error added to agent state
-       ↓
-Gemini receives the error
-       ↓
-new SQL generated
-       ↓
-validation again
+    ↓
+SELECT-only validation
+    ↓
+Reject DDL/DML/multiple statements
+    ↓
+Inject a safe LIMIT
+    ↓
+Execute against database
+    ↓
+Build rows + columns
+    ↓
+Gemini result summary
+    ↓
+Chart suggestion
+    ↓
+JSON response → React
 ```
 
-The same pattern applies to database execution errors.
+If SQL generation or execution fails, the backend feeds the error back into the generation step and retries up to `MAX_AGENT_ATTEMPTS`.
 
-The number of agent attempts is controlled by:
+## Safety model
 
-```env
-MAX_AGENT_ATTEMPTS=3
-```
+DataPilot is intentionally read-only at the application layer.
 
-This makes the pipeline more robust than a simple one-shot LLM → SQL implementation.
+The query pipeline:
 
----
+- accepts only SQL beginning with `SELECT`
+- rejects common write/DDL keywords such as INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, MERGE, GRANT, and REVOKE
+- rejects multiple statements
+- applies a default 500-row result cap
+- applies a 10,000-row maximum for broad "all/every/export" requests
+- supports a separate read-only connection string for production database setups
+- keeps user connection sessions in memory rather than persisting credentials to disk
 
-# Query Execution
+For production deployments, a database account with SELECT-only permissions should still be used. Application-level validation is a second layer, not a replacement for database permissions.
 
-Once SQL passes validation and row-limit enforcement, it is executed using the session's read-only engine.
+## Database support
 
-The execution layer:
+### PostgreSQL
 
-1. retrieves the active session,
-2. opens a database connection,
-3. executes the SQL,
-4. converts results into a pandas DataFrame,
-5. normalizes null values,
-6. extracts columns and rows,
-7. returns structured JSON.
-
-For production systems, DataPilot supports a separate:
-
-```env
-READ_ONLY_DATABASE_URL=...
-READ_ONLY_MODE=true
-```
-
-This allows schema inspection and query execution to use separate database credentials.
-
-**Recommended production setup:** use a dedicated database account with SELECT-only permissions.
-
----
-
-# Result Summarization
-
-After SQL execution, Gemini receives the question and query results and generates a concise natural-language explanation.
-
-For example:
+Connection example:
 
 ```text
-Question:
-"What were the top 5 products by revenue?"
-
-Result:
-Wireless Headphones — $18,430
-Smart Watch         — $16,920
-...
-
-Summary:
-"Wireless Headphones generated the highest revenue, followed by
-Smart Watch and Mechanical Keyboard."
+postgresql://user:password@host:5432/database
 ```
 
-The API returns both the structured result and the explanation.
+### MySQL
 
----
-
-# Chart Suggestions
-
-DataPilot also performs lightweight result-shape analysis.
-
-Depending on the question and returned data, it can suggest:
-
-- bar charts
-- line charts
-- pie charts
-
-Examples:
+Connection example:
 
 ```text
-"Revenue by category"
-        ↓
-Bar chart
-
-"Monthly revenue trend"
-        ↓
-Line chart
-
-"Order distribution by status"
-        ↓
-Pie chart
+mysql://user:password@host:3306/database
 ```
 
-The backend returns a `chart_suggestion` object when the result is suitable for visualization.
+### SQLite
 
----
+Connection example:
 
-# API Flow
+```text
+sqlite:///./analytics.db
+```
 
-## 1. Health Check
+The backend discovers tables and columns from the connected database and constructs schema context dynamically.
+
+## Demo database
+
+The hosted demo uses a deterministic SQLite e-commerce dataset.
+
+| Entity | Approx. rows |
+|---|---:|
+| Customers | 500 |
+| Sellers | 6 |
+| Categories | 6 |
+| Products | 100 |
+| Orders | 3,000 |
+| Order items | 9,000+ |
+| Payments | 3,000 |
+| Reviews | 1,600 |
+| Shipments | 3,000 |
+
+The data covers realistic commerce concepts including products, categories, customers, order totals, payment methods, ratings, shipping carriers, and delivery timestamps.
+
+### Example questions
+
+- Which product generated the most sales?
+- Show the 10 highest-spending customers.
+- How did monthly revenue change in 2026?
+- Which category generated the most revenue?
+- What is the average order value?
+- Which payment method is used most often?
+- Which shipping carrier has the fastest delivery time?
+- What percentage of orders were cancelled?
+- Which products have the highest average rating?
+
+## API
+
+### Health
 
 ```http
 GET /api/health
 ```
 
-Response:
-
-```json
-{
-  "status": "ok",
-  "sessions_active": 1
-}
-```
-
----
-
-## 2. Demo Connection
+### Demo connection
 
 ```http
 POST /api/demo-connect
 ```
 
-No credentials are required.
+Returns a temporary session and schema overview.
 
-The endpoint:
-
-1. initializes the e-commerce SQLite database if necessary,
-2. validates the connection,
-3. creates a session,
-4. extracts the schema,
-5. prepares schema embeddings,
-6. returns the schema overview.
-
-Example response:
-
-```json
-{
-  "session_id": "uuid",
-  "database_name": "ecommerce.db",
-  "db_type": "sqlite",
-  "schema_overview": [
-    {
-      "table": "customers",
-      "row_count": 500
-    },
-    {
-      "table": "orders",
-      "row_count": 3000
-    }
-  ],
-  "message": "Demo mode: connected to 'ecommerce.db' (9 tables)."
-}
-```
-
----
-
-## 3. Custom Database Connection
+### Custom connection
 
 ```http
 POST /api/connect
-```
+Content-Type: application/json
 
-Two connection styles are supported.
-
-### Connection string
-
-```json
 {
-  "connection_string": "postgresql+psycopg2://user:password@host:5432/database"
+  "connection_string": "postgresql://user:password@host:5432/database"
 }
 ```
 
-### Structured fields
+Structured connection fields are also supported:
 
 ```json
 {
   "db_type": "postgresql",
-  "host": "localhost",
+  "host": "db.example.com",
   "port": 5432,
   "database": "analytics",
   "username": "readonly_user",
@@ -568,33 +194,26 @@ Two connection styles are supported.
 }
 ```
 
----
-
-## 4. Natural-Language Query
+### Query
 
 ```http
 POST /api/query
-```
+Content-Type: application/json
 
-Request:
-
-```json
 {
-  "session_id": "uuid",
+  "session_id": "session-uuid",
   "question": "What are the top 10 products by revenue?"
 }
 ```
 
-Response contains:
+Response shape:
 
 ```json
 {
   "sql": "SELECT ...",
-  "summary": "The top product is ...",
+  "summary": "The top products generated ...",
   "columns": ["product_name", "revenue"],
-  "rows": [
-    ["Wireless Headphones 1", 18430.25]
-  ],
+  "rows": [["Product 1", 12345]],
   "row_count": 10,
   "truncated": false,
   "limit_note": "",
@@ -604,375 +223,124 @@ Response contains:
     "y": "revenue"
   },
   "error": null,
-  "elapsed_ms": 1842.4
+  "elapsed_ms": 842.4
 }
 ```
 
----
-
-## 5. Disconnect
+### Disconnect
 
 ```http
-DELETE /api/session/{session_id}
+DELETE /api/session/:session_id
 ```
 
-This disposes the SQLAlchemy engines associated with the session and removes the session from memory.
+## Frontend
 
----
+The frontend is intentionally **JavaScript-only**:
 
-# Demo E-Commerce Database
+- React 19
+- Vite
+- JavaScript / JSX
+- Axios
+- Recharts
+- Lucide React
+- Tailwind CSS tooling
 
-The hosted demo now uses a realistic e-commerce schema instead of the original Chinook music database.
+There is no TypeScript compiler, TypeScript source file, or TypeScript configuration in the active frontend.
 
-## Tables
+The interface has two primary experiences:
 
-```text
-customers
-    │
-    └───────────────┐
-                    ▼
-                  orders
-                    │
-                    ├──────────────► payments
-                    │
-                    ├──────────────► shipments
-                    │
-                    ▼
-               order_items
-                    │
-                    ▼
-                 products
-                 /      \
-                ▼        ▼
-          categories    sellers
+**Connection workspace**
+- one-click demo dataset
+- database URL connection
+- manual PostgreSQL/MySQL/SQLite connection
+- connection validation
+- read-only messaging
 
-customers ─────────────► reviews ◄──────── products
-```
+**Analytics workspace**
+- live schema overview
+- natural-language query input
+- generated SQL inspection
+- sortable/paginated result tables
+- automatic visual suggestions
+- Gemini-generated summaries
+- demo-session recovery after backend restarts
 
-### customers
+## Backend
 
-Stores customer identity and location information.
+The backend is now **JavaScript-only Node.js**:
 
-### sellers
+- Node.js 22+
+- Express 5
+- PostgreSQL via `pg`
+- MySQL via `mysql2`
+- SQLite via Node's built-in `node:sqlite`
+- Gemini via the Google Generative Language REST API
+- CORS
+- in-memory session management
 
-Stores marketplace sellers and seller ratings.
+The backend intentionally keeps the API contract stable so the React application can communicate with the new Express service without changing the product workflow.
 
-### categories
-
-Product category information.
-
-### products
-
-Stores:
-
-- product name
-- category
-- seller
-- price
-- cost
-- inventory
-- creation date
-
-### orders
-
-Stores:
-
-- customer
-- order date
-- order status
-- shipping location
-- subtotal
-- shipping fee
-- discount
-- final amount
-
-### order_items
-
-Stores individual products purchased in each order.
-
-### payments
-
-Stores payment method, payment status, date, and amount.
-
-### reviews
-
-Stores product ratings and review text.
-
-### shipments
-
-Stores carrier, shipping status, shipped date, and delivery date.
-
----
-
-# Demo Dataset Size
-
-The deterministic hosted dataset contains approximately:
-
-```text
-Customers       500
-Sellers           6
-Categories        6
-Products        100
-Orders        3,000
-Order Items   9,000+
-Payments      3,000
-Reviews       1,600
-Shipments     3,000
-```
-
-The dataset is seeded deterministically so the demo remains reproducible.
-
----
-
-# Example Questions
-
-Once connected to the e-commerce demo, try:
-
-### Revenue
-
-```text
-What is the total revenue?
-```
-
-```text
-What were the top 10 products by revenue?
-```
-
-```text
-Show monthly revenue for 2026.
-```
-
-### Customers
-
-```text
-Who are the top 10 customers by total spending?
-```
-
-```text
-Which city has the most customers?
-```
-
-```text
-How many customers have never placed an order?
-```
-
-### Products
-
-```text
-Which category generated the most revenue?
-```
-
-```text
-Which products have the highest average rating?
-```
-
-```text
-Show products with less than 20 units in stock.
-```
-
-### Orders
-
-```text
-What percentage of orders were cancelled?
-```
-
-```text
-Show the order count by status.
-```
-
-```text
-What is the average order value?
-```
-
-### Payments
-
-```text
-Which payment method is used most often?
-```
-
-### Shipping
-
-```text
-What is the average delivery time by carrier?
-```
-
-### Reviews
-
-```text
-Which products have the highest average rating with at least 10 reviews?
-```
-
----
-
-# Project Structure
+## Project structure
 
 ```text
 data-pilot/
-│
 ├── backend/
-│   ├── agent.py              # LangGraph NL → SQL agent
-│   ├── config.py             # Environment/configuration
-│   ├── database.py           # DB connections and sessions
-│   ├── demo_db.py            # Deterministic e-commerce demo DB
-│   ├── main.py               # FastAPI application and API routes
-│   ├── rag.py                # Schema extraction + ChromaDB RAG
-│   └── requirements.txt
+│   ├── agent.js             # Gemini query pipeline + guardrails
+│   ├── config.js            # Environment configuration
+│   ├── database.js          # DB adapters + sessions + schema inspection
+│   ├── demo-db.js           # E-commerce demo database generator
+│   ├── package.json         # Node backend dependencies
+│   └── server.js            # Express API
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ConnectionScreen.tsx
-│   │   │   └── QueryInterface.tsx
-│   │   ├── api.ts             # Backend API client
-│   │   ├── App.tsx
-│   │   ├── types.ts
-│   │   └── ...
+│   │   │   ├── BrandMark.jsx
+│   │   │   ├── ConnectionScreen.jsx
+│   │   │   ├── DataTable.jsx
+│   │   │   ├── QueryInput.jsx
+│   │   │   ├── QueryInterface.jsx
+│   │   │   ├── ResponseCard.jsx
+│   │   │   ├── ResultChart.jsx
+│   │   │   ├── SchemaPanel.jsx
+│   │   │   └── SkeletonCard.jsx
+│   │   ├── api.js
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
 │   ├── package.json
-│   └── vite.config.ts
+│   └── vite.config.js
 │
 └── README.md
 ```
 
----
+## Local development
 
-# Technology Stack
-
-## Frontend
-
-- React
-- TypeScript
-- Vite
-- Axios
-- Recharts
-
-## Backend
-
-- Python
-- FastAPI
-- Uvicorn
-- SQLAlchemy
-- Pandas
-- LangGraph
-- ChromaDB
-- sqlglot
-
-## AI
-
-- Google Gemini
-- Gemini Flash for SQL generation and result summarization
-- Gemini embeddings for schema retrieval
-
-## Databases
-
-- PostgreSQL
-- MySQL
-- SQLite
-
-## Deployment
-
-- Render
-- GitHub
-
----
-
-# Environment Variables
-
-## Backend
-
-Create `.env` in the project root:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-
-# Optional
-GEMINI_MODEL=gemini-3.8-flash
-GEMINI_FALLBACK_MODELS=gemini-3.7-flash,gemini-3.6-flash
-
-# Optional custom/demo database
-DATABASE_URL=sqlite:///./ecommerce.db
-
-# Optional production read-only connection
-READ_ONLY_DATABASE_URL=
-READ_ONLY_MODE=false
-
-# Frontend origin
-FRONTEND_ORIGIN=http://localhost:5173
-
-# Agent configuration
-MAX_AGENT_ATTEMPTS=3
-DEFAULT_ROW_LIMIT=500
-ALL_ROWS_LIMIT=10000
-RAG_TOP_K=5
-RAG_SKIP_THRESHOLD=10
-```
-
-Never commit real API keys, database passwords, or connection strings.
-
----
-
-# Local Development
-
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- npm
-- A Google Gemini API key
-
----
-
-## 1. Clone the repository
-
-```bash
-git clone https://github.com/Harshilkh7/data-pilot.git
-cd data-pilot
-```
-
----
-
-## 2. Configure the backend
-
-Create a `.env` file and add:
-
-```env
-GEMINI_API_KEY=your_key_here
-DATABASE_URL=sqlite:///./ecommerce.db
-```
-
----
-
-## 3. Install backend dependencies
+### 1. Backend
 
 ```bash
 cd backend
-pip install -r requirements.txt
+npm install
 ```
 
----
+Create environment variables:
 
-## 4. Start the backend
+```env
+PORT=8000
+DATABASE_URL=sqlite:///./ecommerce.db
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_FALLBACK_MODELS=gemini-3.7-flash,gemini-3.6-flash
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+Start the API:
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+npm start
 ```
 
-The API will be available at:
-
-```text
-http://localhost:8000
-```
-
-FastAPI's interactive documentation is available at:
-
-```text
-http://localhost:8000/docs
-```
-
----
-
-## 5. Start the frontend
-
-Open another terminal:
+### 2. Frontend
 
 ```bash
 cd frontend
@@ -980,24 +348,24 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL shown in the terminal.
+For local development, Vite proxies `/api` to `http://localhost:8000`.
 
----
+For a separately deployed API:
 
-# Production Deployment
+```env
+VITE_API_URL=https://your-api.onrender.com
+```
 
-The current hosted setup uses Render.
+## Render deployment
 
-## Backend
+### Backend
 
-The FastAPI service uses:
+The Node service uses:
 
 ```text
-Build:
-pip install -r backend/requirements.txt
-
-Start:
-cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+Runtime: Node
+Build:   cd backend && npm install
+Start:   cd backend && npm start
 ```
 
 Required environment variables:
@@ -1010,254 +378,90 @@ DATABASE_URL
 FRONTEND_ORIGIN
 ```
 
-## Frontend
-
-The static frontend uses:
+### Frontend
 
 ```text
-Build:
-cd frontend && npm install && npm run build
-
-Publish directory:
-frontend/dist
+Build:   cd frontend && npm install && npm run build
+Publish: frontend/dist
 ```
 
-Frontend environment:
-
-```env
-VITE_API_URL=https://datapilot-api-7a8n.onrender.com
-```
-
----
-
-# API Request Flow
-
-A typical query travels through the system like this:
+Set:
 
 ```text
-User
- │
- │ "What were the top 10 products by revenue?"
- ▼
-React QueryInterface
- │
- │ POST /api/query
- ▼
-FastAPI
- │
- │ session_id validation
- ▼
-LangGraph
- │
- ├── Retrieve schema
- │       │
- │       └── ChromaDB / Gemini embeddings
- │
- ├── Generate SQL
- │       │
- │       └── Gemini
- │
- ├── Validate SQL
- │       │
- │       └── sqlglot
- │
- ├── Enforce LIMIT
- │
- ├── Execute
- │       │
- │       └── Read-only SQLAlchemy engine
- │
- └── Summarize
-         │
-         └── Gemini
- │
- ▼
-FastAPI JSON response
- │
- ▼
-React
- │
- ├── SQL viewer
- ├── Result table
- ├── Summary
- └── Chart
+VITE_API_URL=https://your-node-api.onrender.com
 ```
 
----
+## Session lifecycle
 
-# Security Model
-
-DataPilot treats AI-generated SQL as untrusted input.
-
-## Current protections
-
-### 1. SELECT-only validation
-
-Non-SELECT statements are rejected.
-
-### 2. SQL parsing
-
-sqlglot parses generated SQL before execution.
-
-### 3. Row limits
-
-Unbounded result sets are capped.
-
-### 4. Read-only execution
-
-A separate read-only database connection can be configured.
-
-### 5. No credential persistence
-
-User-provided database credentials are held only in the runtime session and are not written to disk.
-
-### 6. CORS
-
-The API explicitly controls which frontend origins can access the backend.
-
----
-
-# Important Production Considerations
-
-The current project is designed as a portfolio/demo-grade application, but the architecture can be extended for production.
-
-Recommended future improvements:
-
-- Persistent session metadata with encrypted credential storage or an external secrets manager.
-- Dedicated read-only database roles for every connected database.
-- Redis-backed session management.
-- Authentication and authorization.
-- Per-user database connection isolation.
-- Query timeouts.
-- Database-level statement timeouts.
-- Rate limiting.
-- Audit logging.
-- Persistent schema-embedding storage.
-- Background embedding jobs for very large schemas.
-- Streaming query progress.
-- More advanced SQL AST validation.
-- Query result caching.
-- Usage and token-cost tracking.
-- Workspace/team support.
-
----
-
-# Design Decisions
-
-## Why LangGraph?
-
-The query pipeline is not a single LLM call.
-
-It has distinct states:
+Sessions are intentionally runtime-only:
 
 ```text
-retrieve → generate → validate → limit → execute → summarize
+POST /api/connect
+       ↓
+Generate UUID
+       ↓
+Open DB runtime
+       ↓
+Inspect schema
+       ↓
+Store session in memory
+       ↓
+POST /api/query
+       ↓
+Execute using that runtime
+       ↓
+DELETE /api/session/:id
+       ↓
+Close runtime + remove session
 ```
 
-LangGraph makes these states explicit and allows the system to route failed validation or execution back to SQL generation for self-correction.
+A backend restart invalidates active sessions. The frontend automatically reconnects the credential-free demo session when it receives a missing-session response.
 
-## Why sqlglot?
+Custom database credentials are not written to the repository or persisted as application data.
 
-Generating SQL with an LLM does not guarantee that the SQL is safe or syntactically valid.
+## Design decisions
 
-sqlglot provides an AST-based parsing layer before the query reaches the database.
+### Why Node.js?
 
-## Why ChromaDB?
+The backend is intentionally aligned with the user's full-stack JavaScript workflow. Express provides a small HTTP layer, while Node's asynchronous I/O model is a natural fit for database and Gemini API calls.
 
-A database can have many tables. Semantic retrieval allows the system to provide only the most relevant schema to Gemini instead of sending the complete schema every time.
+### Why JavaScript instead of TypeScript?
 
-## Why SQLAlchemy?
+This version keeps the entire application approachable from a single JavaScript/React stack. Runtime validation and defensive backend checks are used instead of relying on compile-time TypeScript types.
 
-SQLAlchemy provides a common database abstraction for PostgreSQL, MySQL, and SQLite while also exposing schema inspection through its inspector API.
+### Why keep the API contract stable?
 
-## Why a separate read-only engine?
+The migration changes the backend implementation without forcing a frontend rewrite of the product behavior. Existing endpoints and response fields remain compatible with the React client.
 
-Schema inspection may require broader database privileges than query execution.
+### Why Gemini?
 
-Keeping query execution on a dedicated read-only connection provides an additional defense boundary.
+Gemini handles the two language-model tasks in the pipeline:
 
----
+1. Natural language → SQL
+2. SQL result → concise explanation
 
-# Limitations
+The database remains the source of truth; the model does not directly modify database state.
 
-- Custom database sessions are currently stored in memory.
-- Restarting the backend invalidates custom sessions.
-- Gemini availability and latency depend on the upstream API.
-- Generated SQL is constrained by the quality and completeness of the database schema.
-- Complex vendor-specific SQL features may require additional dialect handling.
-- The hosted demo is intentionally bounded by row limits and a small dataset.
+## Limitations
 
----
+- Runtime sessions are stored in process memory and do not survive restarts.
+- The application does not persist custom database credentials.
+- SQL safety checks are application-level guardrails; production deployments should use database permissions as the primary security boundary.
+- Gemini availability can vary by model capacity, so the backend retries temporary failures and supports configured fallback models.
+- Schema retrieval uses lightweight lexical relevance selection for larger schemas rather than a persistent vector database.
 
-# Roadmap
+## Roadmap
 
-- [ ] User authentication
-- [ ] Persistent encrypted connection profiles
-- [ ] PostgreSQL demo database
-- [ ] Larger benchmark dataset
-- [ ] Query history
-- [ ] Saved dashboards
-- [ ] Follow-up questions with conversational context
-- [ ] SQL editing before execution
-- [ ] Export results to CSV
-- [ ] Advanced visualization selection
-- [ ] Query performance monitoring
-- [ ] Redis-backed sessions
-- [ ] Team workspaces
-- [ ] Usage analytics
-- [ ] Production-grade audit logs
-
----
-
-# Example Product Flow
-
-A complete DataPilot interaction looks like:
-
-```text
-1. User opens DataPilot
-             ↓
-2. Clicks "Try Demo"
-             ↓
-3. Backend creates e-commerce SQLite database
-             ↓
-4. Schema is inspected
-             ↓
-5. Tables are embedded into ChromaDB
-             ↓
-6. User asks:
-   "Which category generated the most revenue?"
-             ↓
-7. Relevant schema is retrieved
-             ↓
-8. Gemini generates SQL
-             ↓
-9. sqlglot validates the SQL
-             ↓
-10. DataPilot applies a safe LIMIT
-             ↓
-11. Query runs through the read-only engine
-             ↓
-12. Gemini summarizes the result
-             ↓
-13. Frontend displays:
-      • Summary
-      • Generated SQL
-      • Data table
-      • Chart
-```
-
----
-
-# Author
-
-**Harshil Khandelwal**
-
-B.Tech — MANIT Bhopal
-
-GitHub: https://github.com/Harshilkh7
-
----
+- Persistent schema/index cache
+- Stronger SQL parsing/AST validation across PostgreSQL, MySQL, and SQLite
+- Streaming query responses
+- Saved analytics questions
+- Multi-user authentication
+- Persistent session storage
+- Query audit logs
+- More advanced visualization recommendations
+- Background query execution for expensive analytics
 
 ## License
 
-Add the project's preferred license here before distributing the repository publicly.
+See the repository for the project's license and source history.
