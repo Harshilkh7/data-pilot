@@ -64,8 +64,8 @@ export default function ResponseCard({ item }: Props) {
           </div>
         </div>
         {isError
-          ? <span className="badge badge-error">Error</span>
-          : <span className="badge badge-accent">Done</span>
+          ? <span className="badge badge-error">Issue</span>
+          : <span className="badge badge-accent">Ready</span>
         }
       </div>
 
@@ -75,7 +75,7 @@ export default function ResponseCard({ item }: Props) {
           <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
             <div>
-              <strong>Query failed</strong>
+              <strong>Analysis could not be completed</strong>
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.8125rem', opacity: 0.85 }}>
                 {response.error}
               </p>
@@ -129,7 +129,7 @@ export default function ResponseCard({ item }: Props) {
               }}
             >
               <Code2 size={13} />
-              {sqlOpen ? 'Hide' : 'Show'} generated SQL
+              {sqlOpen ? 'Hide' : 'Inspect'} generated SQL
               {sqlOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>
             {sqlOpen && (
@@ -187,7 +187,7 @@ export default function ResponseCard({ item }: Props) {
         {/* Empty state */}
         {!isError && !hasRows && (
           <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            Query returned no rows.
+            No matching records were found.
           </div>
         )}
       </div>
