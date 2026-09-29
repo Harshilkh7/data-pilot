@@ -152,7 +152,7 @@ export default function ResponseCard({ item }: Props) {
                   onClick={() => setActiveTab('table')}
                 >
                   <TableIcon size={12} style={{ marginRight: 4 }} />
-                  Table
+                  Rows
                 </button>
                 <button
                   id={`tab-chart-${item.id}`}
@@ -161,7 +161,7 @@ export default function ResponseCard({ item }: Props) {
                   onClick={() => setActiveTab('chart')}
                 >
                   <BarChart3 size={12} style={{ marginRight: 4 }} />
-                  Chart
+                  Visual
                 </button>
               </div>
             )}
