@@ -1,6 +1,5 @@
-// src/components/QueryInterface.tsx — main post-connection dashboard
 import { useRef, useState, useEffect } from 'react';
-import { LogOut, Database } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import type { AppSession, QueryHistoryItem } from '../types';
 import { connectDemo, runQuery } from '../api';
 import { generateId } from '../lib/utils';
@@ -8,6 +7,7 @@ import SchemaPanel from './SchemaPanel';
 import QueryInput from './QueryInput';
 import ResponseCard from './ResponseCard';
 import SkeletonCard from './SkeletonCard';
+import BrandMark from './BrandMark';
 
 interface Props {
   session: AppSession;
@@ -21,7 +21,6 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
   const [pendingQuestion, setPendingQuestion] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new cards are added
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, loading]);
@@ -38,9 +37,6 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         const status = (e as { response?: { status?: number } })?.response?.status;
         if (status !== 404 || activeSession.connection_mode !== 'demo') throw e;
 
-        // Render can restart the API process, which clears in-memory sessions.
-        // Demo sessions are safe to recreate automatically because no credentials
-        // are involved and the demo database is deterministic.
         const res = await connectDemo();
         const refreshedSession: AppSession = {
           session_id: res.session_id,
@@ -54,17 +50,16 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         response = await runQuery(refreshedSession.session_id, question);
       }
 
-      const item: QueryHistoryItem = {
+      setHistory(h => [...h, {
         id: generateId(),
         question,
         response,
         timestamp: new Date(),
-      };
-      setHistory(h => [...h, item]);
+      }]);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? (e instanceof Error ? e.message : 'Query failed');
-      const item: QueryHistoryItem = {
+        ?? (e instanceof Error ? e.message : 'Analysis failed');
+      setHistory(h => [...h, {
         id: generateId(),
         question,
         response: {
@@ -80,8 +75,7 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
           elapsed_ms: 0,
         },
         timestamp: new Date(),
-      };
-      setHistory(h => [...h, item]);
+      }]);
     } finally {
       setLoading(false);
       setPendingQuestion('');
@@ -90,7 +84,6 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
 
   return (
     <div className="workspace-shell">
-      {/* Top navigation bar */}
       <header className="workspace-topbar" style={{
         display: 'flex',
         alignItems: 'center',
@@ -102,7 +95,7 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         zIndex: 10,
       }}>
         <div className="workspace-brand">
-          <Database size={18} color="var(--color-accent)" />
+          <BrandMark size={30} />
           <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.01em' }}>DataPilot</span>
         </div>
 
@@ -110,7 +103,7 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
 
         <div className="workspace-meta">
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-            Connected to
+            Active source
           </span>
           <span className="badge badge-accent">
             {session.database_name}
@@ -121,16 +114,13 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
             onClick={onDisconnect}
             style={{ fontSize: '0.75rem', gap: '0.375rem' }}
           >
-            <LogOut size={13} /> Disconnect
+            <LogOut size={13} /> Close workspace
           </button>
         </div>
       </header>
 
-      {/* Main content area — scrollable */}
       <div className="workspace-scroll">
         <div className="workspace-content">
-
-          {/* Schema panel */}
           <div className="schema-wrap">
             <SchemaPanel
               databaseName={session.database_name}
@@ -140,25 +130,22 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
             />
           </div>
 
-          {/* Empty state */}
           {history.length === 0 && !loading && (
             <div className="workspace-empty">
-              <div className="empty-orbit"><span>✦</span></div>
+              <div className="empty-orbit"><span>⌁</span></div>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-text-secondary)', margin: '0 0 0.5rem' }}>
-                Ask your first question
+                Start with a data question
               </h2>
               <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                Type a question below to query <strong style={{ color: 'var(--color-accent)' }}>{session.database_name}</strong> in plain English.
+                Ask in plain English and DataPilot will turn your request into a safe, executable query.
               </p>
             </div>
           )}
 
-          {/* Query history */}
           {history.map(item => (
             <ResponseCard key={item.id} item={item} />
           ))}
 
-          {/* Loading skeleton */}
           {loading && pendingQuestion && (
             <SkeletonCard question={pendingQuestion} />
           )}
@@ -167,13 +154,9 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         </div>
       </div>
 
-      {/* Sticky input bar */}
       <div className="query-dock">
         <div className="query-dock-inner">
-          <QueryInput
-            onSubmit={handleQuestion}
-            loading={loading}
-          />
+          <QueryInput onSubmit={handleQuestion} loading={loading} />
         </div>
       </div>
     </div>
