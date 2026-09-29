@@ -303,10 +303,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .connection-shell{min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) 500px;align-items:center;gap:5vw;padding:clamp(2rem,6vw,7rem);position:relative;overflow:hidden}
 .connection-shell:after{content:"";position:absolute;width:620px;height:620px;border-radius:50%;right:-280px;top:-240px;background:radial-gradient(circle,rgba(139,92,246,.18),transparent 68%);pointer-events:none}
 .brand-hero{max-width:620px;position:relative;z-index:1}
-.brand-mark{width:58px;height:58px!important;border-radius:17px!important;background:linear-gradient(135deg,rgba(139,92,246,.22),rgba(6,182,212,.12))!important;border:1px solid rgba(167,139,250,.3)!important;box-shadow:0 18px 55px rgba(100,70,220,.2),inset 0 1px rgba(255,255,255,.12);margin-bottom:24px!important}
+.brand-mark{width:72px!important;height:72px!important;display:grid!important;place-items:center!important;border-radius:22px!important;background:linear-gradient(145deg,rgba(139,92,246,.14),rgba(34,211,238,.07))!important;border:1px solid rgba(167,139,250,.22)!important;box-shadow:0 22px 65px rgba(70,55,180,.2),inset 0 1px rgba(255,255,255,.1);margin-bottom:24px!important}
 .brand-title{font-size:clamp(3.3rem,6vw,6.3rem)!important;line-height:.95!important;letter-spacing:-.065em!important;font-weight:700!important;margin:0!important;background:linear-gradient(120deg,#fff 15%,#d8d1ff 55%,#8be9f4 100%)!important;-webkit-background-clip:text!important;-webkit-text-fill-color:transparent!important}
 .brand-subtitle{font-size:1.08rem!important;line-height:1.7!important;max-width:530px!important;margin:22px 0 0!important;color:#9ca8ba!important}
-.brand-hero:before{content:"NATURAL LANGUAGE → SQL";display:inline-flex;margin-bottom:16px;padding:6px 10px;border:1px solid rgba(139,92,246,.2);border-radius:999px;color:#b7a7ff;font-size:10px;font-weight:700;letter-spacing:.14em;background:rgba(139,92,246,.07)}
+.brand-hero:before{content:"ASK → ANALYZE → EXPLAIN";display:inline-flex;margin-bottom:16px;padding:6px 10px;border:1px solid rgba(139,92,246,.2);border-radius:999px;color:#b7a7ff;font-size:10px;font-weight:700;letter-spacing:.14em;background:rgba(139,92,246,.07)}
 .connection-card{width:100%;max-width:500px;padding:28px;background:rgba(12,16,24,.82);border:1px solid rgba(255,255,255,.09);border-radius:24px;box-shadow:0 35px 100px rgba(0,0,0,.45),inset 0 1px rgba(255,255,255,.045);backdrop-filter:blur(24px);position:relative;z-index:2}
 .demo-banner{width:100%;margin-bottom:18px!important;justify-content:center!important;min-height:48px!important;border-radius:13px!important;background:linear-gradient(100deg,rgba(139,92,246,.13),rgba(6,182,212,.08))!important;border:1px solid rgba(139,92,246,.24)!important;color:#e9e4ff!important;font-weight:650!important;cursor:pointer}
 .demo-banner:hover{background:linear-gradient(100deg,rgba(139,92,246,.2),rgba(6,182,212,.12))!important}
@@ -316,11 +316,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .connect-main{width:100%;min-height:48px;margin-top:18px;border:0;border-radius:13px;color:white;background:linear-gradient(100deg,#8b5cf6,#6657e9);font-weight:700;cursor:pointer;box-shadow:0 12px 35px rgba(105,82,240,.24);transition:.2s}
 .connect-main:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 17px 42px rgba(105,82,240,.34)}
 .connect-main:disabled{opacity:.45;cursor:not-allowed}
-.connection-footer{margin-top:20px!important;text-align:center}
+.connection-footer{margin-top:20px!important;text-align:center}.workspace-brand .brand-mark{width:30px!important;height:30px!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important}
 .workspace-shell{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(180deg,#05070b,#070a10)}
 .workspace-topbar{height:66px!important;padding:0 28px!important;background:rgba(7,10,16,.8)!important;border-bottom:1px solid var(--border)!important;backdrop-filter:blur(20px);position:relative}
 .workspace-brand{display:flex;align-items:center;gap:10px;font-size:15px}
-.workspace-brand:before{content:"";width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 14px #34d399}
+.workspace-brand:before{content:"";width:7px;height:7px;border-radius:2px;background:linear-gradient(135deg,#a78bfa,#22d3ee);box-shadow:0 0 14px rgba(34,211,238,.35);transform:rotate(45deg)}
 .workspace-topbar-spacer{flex:1}
 .workspace-meta{display:flex;align-items:center;gap:10px}
 .workspace-scroll{flex:1;overflow-y:auto;padding:38px 28px 150px!important}
