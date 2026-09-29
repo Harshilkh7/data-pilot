@@ -4,14 +4,14 @@ import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } fro
 import { formatNumber } from '../lib/utils';
 
 
-function cellDisplay(v): string {
+function cellDisplay(v) {
   if (v === null || v === undefined) return '—';
   return String(v);
 }
 
 export default function DataTable({ columns, rows, rowCount, pageSize = 25 }) {
-  const [sortCol, setSortCol] = useState<number | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>(null);
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState(null);
   const [page, setPage] = useState(0);
 
   const sorted = useMemo(() => {
