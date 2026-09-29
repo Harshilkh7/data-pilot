@@ -89,8 +89,9 @@ async function introspect(runtime) {
     const { rows } = await runtime.primary.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name`);
     const schemas = [];
     for (const r of rows) {
-      const c = await runtime.primary.query(`SELECT column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`, [r.table_name]);
-      schemas.push({ table: r.table_name, columns: c.rows.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: false })), foreign_keys: [] });
+      const c = await runtime.primary.query(`SELECT column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`, [r.table_name]);
+      const fk = await runtime.primary.query(`SELECT kcu.column_name, ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema WHERE tc.table_schema='public' AND tc.table_name=$1 AND tc.constraint_type='FOREIGN KEY'`, [r.table_name]);
+      schemas.push({ table: r.table_name, columns: c.rows.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: false })), foreign_keys: fk.rows.map(x => ({ column: x.column_name, references_table: x.foreign_table_name, references_column: x.foreign_column_name })) });
     }
     return schemas;
   }
@@ -98,8 +99,9 @@ async function introspect(runtime) {
   const [tables] = await runtime.primary.query("SELECT table_name FROM information_schema.tables WHERE table_schema=? AND table_type='BASE TABLE' ORDER BY table_name", [db]);
   const schemas = [];
   for (const r of tables) {
-    const [c] = await runtime.primary.query("SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=? AND table_name=? ORDER BY ordinal_position", [db, r.table_name]);
-    schemas.push({ table: r.table_name, columns: c.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: x.column_key === "PRI" })), foreign_keys: [] });
+    const [c] = await runtime.primary.query("SELECT column_name,data_type,is_nullable,column_key FROM information_schema.columns WHERE table_schema=? AND table_name=? ORDER BY ordinal_position", [db, r.table_name]);
+    const [fk] = await runtime.primary.query("SELECT column_name,referenced_table_name,referenced_column_name FROM information_schema.key_column_usage WHERE table_schema=? AND table_name=? AND referenced_table_name IS NOT NULL", [db, r.table_name]);
+    schemas.push({ table: r.table_name, columns: c.map(x => ({ name: x.column_name, type: x.data_type, nullable: x.is_nullable === "YES", primary_key: x.column_key === "PRI" })), foreign_keys: fk.map(x => ({ column: x.column_name, references_table: x.referenced_table_name, references_column: x.referenced_column_name })) });
   }
   return schemas;
 }
