@@ -1,4 +1,3 @@
-// src/components/QueryInput.tsx — chat-style question input
 import { useRef, useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 
@@ -9,10 +8,10 @@ interface Props {
 }
 
 const EXAMPLE_QUESTIONS = [
-  'Which artist has the most albums?',
-  'Show me the top 10 customers by total spend.',
-  'How many tracks are in the Rock genre?',
-  'What is the total revenue by country?',
+  'Which product generated the most sales?',
+  'Show the 10 highest-spending customers.',
+  'How did monthly revenue change in 2026?',
+  'Which shipping carrier has the fastest delivery time?',
 ];
 
 export default function QueryInput({ onSubmit, loading, disabled }: Props) {
@@ -36,7 +35,6 @@ export default function QueryInput({ onSubmit, loading, disabled }: Props) {
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setQuestion(e.target.value);
-    // Auto-resize
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
@@ -44,7 +42,6 @@ export default function QueryInput({ onSubmit, loading, disabled }: Props) {
 
   return (
     <div>
-      {/* Example chips */}
       {!loading && !question && (
         <div style={{
           display: 'grid',
@@ -74,7 +71,6 @@ export default function QueryInput({ onSubmit, loading, disabled }: Props) {
         </div>
       )}
 
-      {/* Input row */}
       <div style={{
         display: 'flex',
         gap: '0.75rem',
@@ -91,7 +87,7 @@ export default function QueryInput({ onSubmit, loading, disabled }: Props) {
           id="question-input"
           ref={textareaRef}
           className="input"
-          placeholder="Ask anything about your data…"
+          placeholder="Explore your data in plain English…"
           value={question}
           onChange={handleInput}
           onKeyDown={handleKey}
@@ -115,15 +111,13 @@ export default function QueryInput({ onSubmit, loading, disabled }: Props) {
           onClick={handleSubmit}
           disabled={!question.trim() || loading || disabled}
           style={{ height: 36, width: 36, padding: 0, borderRadius: 8, flexShrink: 0 }}
+          aria-label="Run analysis"
         >
-          {loading
-            ? <Loader2 size={16} className="animate-spin-slow" />
-            : <Send size={15} />
-          }
+          {loading ? <Loader2 size={16} className="animate-spin-slow" /> : <Send size={15} />}
         </button>
       </div>
       <p style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem', marginTop: '0.375rem', textAlign: 'right' }}>
-        Enter to send · Shift+Enter for new line
+        Enter to run · Shift+Enter for a new line
       </p>
     </div>
   );
