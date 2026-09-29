@@ -9,16 +9,16 @@ import SkeletonCard from './SkeletonCard';
 import BrandMark from './BrandMark';
 
 export default function QueryInterface({ session, onDisconnect, onSessionRefresh }) {
-  const [history, setHistory] = useState<QueryHistoryItem[]>([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, loading]);
 
-  const handleQuestion = async (question: string) => {
+  const handleQuestion = async (question) => {
     setLoading(true);
     setPendingQuestion(question);
     try {
@@ -31,7 +31,7 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         if (status !== 404 || activeSession.connection_mode !== 'demo') throw e;
 
         const res = await connectDemo();
-        const refreshedSession: AppSession = {
+        const refreshedSession = {
           session_id: res.session_id,
           database_name: res.database_name,
           db_type: res.db_type,
@@ -50,7 +50,7 @@ export default function QueryInterface({ session, onDisconnect, onSessionRefresh
         timestamp: new Date(),
       }]);
     } catch (e) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      const msg = (e)?.response?.data?.detail
         ?? (e instanceof Error ? e.message : 'Analysis failed');
       setHistory(h => [...h, {
         id: generateId(),
