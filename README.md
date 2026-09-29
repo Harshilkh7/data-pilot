@@ -57,6 +57,10 @@ Load active database session
     ↓
 Read database schema
     ↓
+Generate schema descriptions
+    ↓
+Gemini Embeddings → ChromaDB semantic retrieval
+    ↓
 Select relevant tables/columns
     ↓
 Gemini generates SQL
@@ -274,7 +278,11 @@ The backend is now **JavaScript-only Node.js**:
 - PostgreSQL via `pg`
 - MySQL via `mysql2`
 - SQLite via Node's built-in `node:sqlite`
-- Gemini via the Google Generative Language REST API
+- Gemini via the Google Generative Language API
+- Gemini `gemini-embedding-001` for schema embeddings
+- ChromaDB for vector retrieval, with an in-process cosine-similarity fallback when a Chroma server is unavailable
+- LangGraph.js for the multi-stage query workflow and retry routing
+- `node-sql-parser` for SQL parsing/SELECT-only validation
 - CORS
 - in-memory session management
 
@@ -285,10 +293,11 @@ The backend intentionally keeps the API contract stable so the React application
 ```text
 data-pilot/
 ├── backend/
-│   ├── agent.js             # Gemini query pipeline + guardrails
-│   ├── config.js            # Environment configuration
+│   ├── agent.js             # LangGraph query workflow + Gemini + guardrails
+│   ├── config.js            # Environment + RAG configuration
 │   ├── database.js          # DB adapters + sessions + schema inspection
 │   ├── demo-db.js           # E-commerce demo database generator
+│   ├── rag.js               # Gemini embeddings + ChromaDB schema RAG
 │   ├── package.json         # Node backend dependencies
 │   └── server.js            # Express API
 │
@@ -331,6 +340,11 @@ DATABASE_URL=sqlite:///./ecommerce.db
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_FALLBACK_MODELS=gemini-3.7-flash,gemini-3.6-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+GEMINI_EMBEDDING_DIMENSIONS=768
+CHROMA_URL=http://localhost:8001
+RAG_TOP_K=5
+RAG_SKIP_THRESHOLD=10
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
@@ -339,6 +353,16 @@ Start the API:
 ```bash
 npm start
 ```
+
+### Optional: local ChromaDB
+
+Start the vector database used by the semantic schema retriever:
+
+```bash
+docker compose -f docker-compose.chroma.yml up -d
+```
+
+The Node backend connects to `http://localhost:8001` by default. If Chroma is unavailable, semantic embeddings are still used with an in-process cosine-similarity index.
 
 ### 2. Frontend
 
@@ -448,7 +472,8 @@ The database remains the source of truth; the model does not directly modify dat
 - The application does not persist custom database credentials.
 - SQL safety checks are application-level guardrails; production deployments should use database permissions as the primary security boundary.
 - Gemini availability can vary by model capacity, so the backend retries temporary failures and supports configured fallback models.
-- Schema retrieval uses lightweight lexical relevance selection for larger schemas rather than a persistent vector database.
+- ChromaDB is an external service in production; if it is unavailable, the backend falls back to an in-process semantic vector index using the same Gemini embeddings.
+- Runtime sessions and their schema indexes are process-local and do not survive backend restarts.
 
 ## Roadmap
 
