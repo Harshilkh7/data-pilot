@@ -50,12 +50,14 @@ app.post("/api/connect", connectHandler);
 app.post("/api/demo-connect", async (req, res) => {
   try {
     const [sessionId, session] = await connectFromDemo();
+    const rag = await indexSchema(sessionId);
     const overview = await schemaOverview(session);
     res.json({
       session_id: sessionId,
       database_name: session.runtime.name,
       db_type: session.runtime.type,
       schema_overview: overview,
+      rag: { indexed_tables: rag.indexed, provider: rag.provider },
       message: `Demo mode: connected to '${session.runtime.name}' (${session.tableNames.length} tables).`
     });
   } catch (err) {
