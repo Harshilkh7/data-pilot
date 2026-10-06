@@ -44,9 +44,46 @@ CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 export function ensureDemoDatabase(filePath) {
   const dbPath=path.resolve(filePath);
   fs.mkdirSync(path.dirname(dbPath),{recursive:true});
-  const db=new DatabaseSync(dbPath);
+  let db=new DatabaseSync(dbPath);
+  db.exec("PRAGMA foreign_keys = ON");
+
   const existing=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
-  if (existing.length) { db.close(); return; }
+  if (existing.length) {
+    const requiredCounts = [
+      ["categories", 6],
+      ["sellers", 6],
+      ["customers", 500],
+      ["products", 120],
+      ["orders", 3000],
+      ["order_items", 3000],
+      ["payments", 3000],
+      ["reviews", 1600],
+      ["shipments", 3000],
+    ];
+    const healthy = requiredCounts.every(([table, minimum]) => {
+      try {
+        const row = db.prepare("SELECT COUNT(*) AS count FROM " + table).get();
+        return Number(row?.count ?? 0) >= minimum;
+      } catch {
+        return false;
+      }
+    });
+
+    if (healthy) {
+      db.close();
+      return;
+    }
+
+    // A previous seed may have failed after creating the tables, leaving a
+    // partially populated database. Rebuild the disposable demo database.
+    db.close();
+    for (const suffix of ["", "-wal", "-shm"]) {
+      try { fs.rmSync(dbPath + suffix, { force: true }); } catch {}
+    }
+    db=new DatabaseSync(dbPath);
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+
   db.exec(SCHEMA);
 
   const categoryNames=[...new Set(PRODUCTS.map(p=>p[1]))];
@@ -105,7 +142,15 @@ export function ensureDemoDatabase(filePath) {
 
   const addReview=db.prepare("INSERT INTO reviews VALUES (?,?,?,?,?,?)");
   const texts=["Great value for the price.","Works exactly as expected.","Fast delivery and good quality.","Average product, but acceptable.","Not what I expected from the listing."];
-  for(let id=1;id<=1600;id++) addReview.run(id,int(1,500),int(1,100),[1,2,3,4,5][[3,5,12,30,50].reduce((a,w,i)=>a+(rand()<w/100?i:0),0)],choice(texts),sqlDate(dateBetween(start,end)).slice(0,10));
+  function randomRating(){
+    const r=rand();
+    if(r<0.03) return 1;
+    if(r<0.08) return 2;
+    if(r<0.20) return 3;
+    if(r<0.50) return 4;
+    return 5;
+  }
+  for(let id=1;id<=1600;id++) addReview.run(id,int(1,500),int(1,120),randomRating(),choice(texts),sqlDate(dateBetween(start,end)).slice(0,10));
 
   db.close();
 }
