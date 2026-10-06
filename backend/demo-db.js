@@ -84,11 +84,19 @@ export function ensureDemoDatabase(filePath) {
     const cid=int(1,500), orderDate=dateBetween(start,end), status=choice(STATUSES), loc=choice(LOCATIONS);
     const selected=[]; const used=new Set(); const count=int(1,5);
     while(selected.length<count){ const p=choice(products); if(!used.has(p[0])){used.add(p[0]);selected.push(p);} }
+    // Build child rows first so the order total can be calculated.
+    // Insert the parent order before its FK-dependent child rows.
+    const itemRows=[];
     let subtotal=0;
-    for(const p of selected){ const qty=int(1,3), total=money(qty*p[4]); subtotal+=total; addItem.run(itemId++,oid,p[0],qty,p[4],total); }
+    for(const p of selected){
+      const qty=int(1,3), total=money(qty*p[4]);
+      subtotal+=total;
+      itemRows.push([itemId++,oid,p[0],qty,p[4],total]);
+    }
     subtotal=money(subtotal);
     const shipping=subtotal>=75?0:choice([4.99,7.99,9.99]), discount=money(subtotal*choice([0,0,.05,.10,.15])), total=money(subtotal+shipping-discount);
     addOrder.run(oid,cid,sqlDate(orderDate),status,loc[0],loc[1],loc[2],subtotal,shipping,discount,total);
+    for(const row of itemRows) addItem.run(...row);
     addPayment.run(oid,oid,sqlDate(orderDate),choice(PAYMENTS),status==="cancelled"&&rand()<.25?"failed":"paid",total);
     let shipped=null,delivered=null;
     if(["shipped","delivered","returned"].includes(status)){ const sd=new Date(orderDate.getTime()+int(1,3)*86400000); shipped=sqlDate(sd); if(["delivered","returned"].includes(status)) delivered=sqlDate(new Date(sd.getTime()+int(1,6)*86400000)); }
