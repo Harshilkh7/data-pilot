@@ -14,34 +14,72 @@ const AgentState = Annotation.Root({
 
 async function callGemini(prompt, maxOutputTokens = 1024) {
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
+
   const models = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS.filter(m => m !== GEMINI_MODEL)];
   let lastError;
+
   for (const model of models) {
-    let delay = 5000;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25000);
+
       try {
-        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + GEMINI_API_KEY, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens } }),
-        });
+        console.log("[Gemini] request", JSON.stringify({ model, attempt: attempt + 1, maxOutputTokens }));
+        const response = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": GEMINI_API_KEY,
+            },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                maxOutputTokens,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
+            }),
+            signal: controller.signal,
+          }
+        );
+
         const body = await response.text();
+
         if (!response.ok) {
           lastError = new Error("Gemini API " + response.status + ": " + body.slice(0, 500));
-          if (![429, 500, 502, 503, 504].includes(response.status)) break;
-          if (attempt < 3) { await new Promise(r => setTimeout(r, delay)); delay = Math.min(delay * 2, 40000); continue; }
-          break;
+          console.warn("[Gemini] error", lastError.message);
+          if ([400, 401, 403, 404].includes(response.status)) break;
+          if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
+          continue;
         }
+
         const data = JSON.parse(body);
-        return data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+        const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+        if (!text.trim()) {
+          lastError = new Error("Gemini returned an empty response.");
+          console.warn("[Gemini] empty response", JSON.stringify({ model, attempt: attempt + 1 }));
+          if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+
+        console.log("[Gemini] success", JSON.stringify({ model, attempt: attempt + 1 }));
+        return text;
       } catch (error) {
-        lastError = error;
-        if (attempt < 3) { await new Promise(r => setTimeout(r, delay)); delay = Math.min(delay * 2, 40000); }
+        lastError = error.name === "AbortError"
+          ? new Error("Gemini request timed out after 25 seconds.")
+          : error;
+        console.warn("[Gemini] request failed", lastError.message);
+
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
+      } finally {
+        clearTimeout(timeout);
       }
     }
   }
+
   throw lastError || new Error("Gemini request failed.");
 }
-
 function cleanSql(text) { return String(text).replace(/^\s*```(?:sql)?\s*/i, "").replace(/\s*```\s*$/i, "").trim().replace(/;\s*$/, ""); }
 function parserDialect(type) { return type === "mysql" ? "MySQL" : type === "postgresql" ? "Postgresql" : "SQLite"; }
 
