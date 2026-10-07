@@ -100,12 +100,31 @@ export async function indexSchema(sessionId) {
   const session = getSession(sessionId);
   const tables = session.schemas;
   if (!tables.length) return { indexed: 0, provider: "none" };
+
   const descriptions = tables.map(describeTable);
+
+  // Small schemas are passed to Gemini in full anyway. Do not spend an
+  // embedding request or depend on a sleeping/free Chroma service for them.
+  if (tables.length <= RAG_SKIP_THRESHOLD) {
+    localIndexes.set(sessionId, { provider: "full-schema", tables, descriptions, embeddings: [] });
+    console.log(`RAG: ${tables.length} tables <= threshold ${RAG_SKIP_THRESHOLD}; indexing skipped because full schema is used.`);
+    return { indexed: tables.length, provider: "full-schema" };
+  }
+
   if (!GEMINI_API_KEY) {
     localIndexes.set(sessionId, { provider: "unavailable", tables, descriptions, embeddings: [] });
-    return { indexed: 0, provider: "unavailable" };
+    return { indexed: tables.length, provider: "unavailable" };
   }
-  const embeddings = await embedTexts(descriptions);
+
+  let embeddings;
+  try {
+    embeddings = await embedTexts(descriptions);
+  } catch (error) {
+    console.warn(`RAG: embedding unavailable (${error.message}); falling back to full schema.`);
+    localIndexes.set(sessionId, { provider: "full-schema-fallback", tables, descriptions, embeddings: [] });
+    return { indexed: tables.length, provider: "full-schema-fallback" };
+  }
+
   try {
     const result = await tryChromaIndex(sessionId, tables, descriptions, embeddings);
     localIndexes.set(sessionId, buildLocalIndex(tables, embeddings, descriptions));
@@ -123,25 +142,44 @@ export async function retrieveRelevantTables(sessionId, question, fullSchema) {
     console.log(`RAG: ${fullSchema.length} tables <= threshold ${RAG_SKIP_THRESHOLD}; using full schema.`);
     return fullSchema;
   }
+
+  const index = localIndexes.get(sessionId);
   if (!GEMINI_API_KEY) return fullSchema;
-  const queryEmbedding = (await embedTexts([question]))[0];
-  const name = collectionName(sessionId);
+
+  let queryEmbedding;
   try {
+    queryEmbedding = (await embedTexts([question]))[0];
+    const name = collectionName(sessionId);
     const collection = await getChromaClient().getCollection({ name, embeddingFunction: null });
-    const result = await collection.query({ queryEmbeddings: [queryEmbedding], nResults: Math.min(RAG_TOP_K, fullSchema.length), include: ["metadatas", "distances"] });
+    const result = await collection.query({
+      queryEmbeddings: [queryEmbedding],
+      nResults: Math.min(RAG_TOP_K, fullSchema.length),
+      include: ["metadatas", "distances"],
+    });
+
     const names = new Set();
-    for (const list of result.metadatas || []) for (const meta of list || []) if (meta?.table_name) names.add(meta.table_name);
+    for (const list of result.metadatas || []) {
+      for (const meta of list || []) {
+        if (meta?.table_name) names.add(meta.table_name);
+      }
+    }
+
     const selected = fullSchema.filter(t => names.has(t.name));
     if (selected.length) {
       console.log(`RAG: retrieved ${selected.length} tables from Chroma: ${[...names].join(", ")}`);
       return selected;
     }
   } catch (error) {
-    console.warn(`RAG: Chroma query failed (${error.message}); using local vector index.`);
+    console.warn(`RAG: semantic retrieval unavailable (${error.message}); using local/full schema fallback.`);
   }
-  const index = localIndexes.get(sessionId);
+
   if (!index || !index.embeddings?.length) return fullSchema;
-  return index.map(item => ({ ...item, score: cosine(queryEmbedding, item.embedding) })).sort((a, b) => b.score - a.score).slice(0, Math.min(RAG_TOP_K, index.length)).map(item => item.table);
+
+  return index
+    .map(item => ({ ...item, score: cosine(queryEmbedding, item.embedding) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(RAG_TOP_K, index.length))
+    .map(item => item.table);
 }
 
 export async function removeSchemaIndex(sessionId) {
