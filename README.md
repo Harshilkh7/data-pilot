@@ -137,7 +137,7 @@ The hosted demo uses a deterministic SQLite e-commerce dataset.
 | Customers | 500 |
 | Sellers | 6 |
 | Categories | 6 |
-| Products | 100 |
+| Products | 120 |
 | Orders | 3,000 |
 | Order items | 9,000+ |
 | Payments | 3,000 |
@@ -280,7 +280,8 @@ The backend is now **JavaScript-only Node.js**:
 - SQLite via Node's built-in `node:sqlite`
 - Gemini via the Google Generative Language API
 - Gemini `gemini-embedding-001` for schema embeddings
-- ChromaDB for vector retrieval, with an in-process cosine-similarity fallback when a Chroma server is unavailable
+- Hosted ChromaDB for vector retrieval, with an in-process cosine-similarity fallback when Chroma is unavailable
+- The current Render Chroma service is deployed at `https://datapilot-chroma-py.onrender.com` and protected with token authentication
 - LangGraph.js for the multi-stage query workflow and retry routing
 - `node-sql-parser` for SQL parsing/SELECT-only validation
 - CORS
@@ -396,10 +397,10 @@ Required environment variables:
 
 ```text
 GEMINI_API_KEY
-GEMINI_MODEL
-GEMINI_FALLBACK_MODELS
 DATABASE_URL
 FRONTEND_ORIGIN
+CHROMA_URL
+CHROMA_AUTH_TOKEN
 ```
 
 ### Frontend
