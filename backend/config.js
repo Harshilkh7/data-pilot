@@ -3,7 +3,7 @@ import "dotenv/config";
 export const PORT = Number(process.env.PORT || 8000);
 export const DATABASE_URL = process.env.DATABASE_URL || "sqlite:///./ecommerce.db";
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 export const GEMINI_FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || "")
   .split(",").map(s => s.trim()).filter(Boolean).filter(m => m !== GEMINI_MODEL);
 
