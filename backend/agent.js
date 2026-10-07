@@ -80,7 +80,7 @@ async function callGemini(prompt, maxOutputTokens = 768) {
 function cleanSql(text) {
   let value = String(text || "").trim();
 
-  const fenced = value.match(/\`\`\`(?:sql)?\\s*([\\s\\S]*?)\`\`\`/i);
+  const fenced = value.match(/```(?:sql)?\s*([\s\S]*?)```/i);
   if (fenced) value = fenced[1].trim();
 
   const selectIndex = value.search(/\bSELECT\b/i);
