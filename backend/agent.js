@@ -150,8 +150,13 @@ async function validateSelect(sql, dbType) {
   if (FORBIDDEN.test(cleaned)) throw new Error("Forbidden SQL statement detected. Only read-only SELECT queries are allowed.");
   if (cleaned.includes(";")) throw new Error("Multiple SQL statements are not permitted.");
   try {
-    const { Parser } = await import("node-sql-parser");
-    const ast = new Parser().astify(cleaned, { database: parserDialect(dbType) });
+    const parserModule = await import("node-sql-parser");
+    const Parser = parserModule.Parser || parserModule.default?.Parser;
+    if (typeof Parser !== "function") {
+      throw new Error("node-sql-parser Parser export is unavailable.");
+    }
+    const parser = new Parser();
+    const ast = parser.astify(cleaned, { database: parserDialect(dbType) });
     const statements = Array.isArray(ast) ? ast : [ast];
     for (const statement of statements) if (String(statement?.type || "").toLowerCase() !== "select") throw new Error("Only SELECT queries are permitted. Got: " + (statement?.type || "unknown") + ".");
   } catch (error) {
