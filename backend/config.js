@@ -14,6 +14,7 @@ export const CHROMA_URL = process.env.CHROMA_URL || "http://localhost:8001";
 export const CHROMA_TENANT = process.env.CHROMA_TENANT || "default_tenant";
 export const CHROMA_DATABASE = process.env.CHROMA_DATABASE || "default_database";
 export const CHROMA_API_KEY = process.env.CHROMA_API_KEY || "";
+export const CHROMA_AUTH_TOKEN = process.env.CHROMA_AUTH_TOKEN || "";
 export const RAG_TOP_K = Number(process.env.RAG_TOP_K || 5);
 export const RAG_SKIP_THRESHOLD = Number(process.env.RAG_SKIP_THRESHOLD || 10);
 
