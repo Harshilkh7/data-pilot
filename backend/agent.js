@@ -207,7 +207,6 @@ async function generateSql(state) {
 
   const schema = schemaToSqlDdl(state.relevantSchema);
   const retryContext = state.errorContext ? "\n\nPrevious attempt failed. Fix this exact problem:\n" + state.errorContext : "";
-  const session = getSession(state.sessionId);
   const prompt = `You are a precise SQL assistant. Output ONLY one raw SQL SELECT query.
 
 Rules:
