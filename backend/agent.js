@@ -160,8 +160,28 @@ Question: ${state.question}${retryContext}`;
 }
 
 async function validateSqlNode(state) {
-  try { const session = getSession(state.sessionId); return { sql: await validateSelect(state.sql, session.runtime.type), errorContext: "" }; }
-  catch (error) { return { errorContext: error.message }; }
+  try {
+    const session = getSession(state.sessionId);
+    const sql = await validateSelect(state.sql, session.runtime.type);
+    console.log("[SQLValid]", JSON.stringify({ attempt: state.attemptCount, sql }));
+    return { sql, errorContext: "", finalError: "" };
+  } catch (error) {
+    console.warn("[SQLValidationError]", JSON.stringify({
+      attempt: state.attemptCount,
+      sql: state.sql,
+      error: error.message,
+    }));
+
+    if (state.attemptCount >= MAX_AGENT_ATTEMPTS) {
+      return {
+        errorContext: error.message,
+        finalError: "The generated SQL could not be validated after " + MAX_AGENT_ATTEMPTS +
+          " attempts. Last validation error: " + error.message,
+      };
+    }
+
+    return { errorContext: error.message };
+  }
 }
 function limitInject(state) { const limited = injectLimit(state.sql, state.question); return { sql: limited.sql, truncated: limited.truncated, limitNote: limited.limitNote }; }
 
@@ -213,8 +233,19 @@ async function summarizeResults(state) {
   };
 }
 function routeAfterGenerate(state) { return state.finalError ? END : "validate_sql"; }
-function routeAfterValidate(state) { if (state.finalError) return END; if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql"; if (state.errorContext) return END; return "limit_inject"; }
-function routeAfterExecute(state) { if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql"; if (state.errorContext) return END; return "summarize_results"; }
+function routeAfterValidate(state) {
+  if (state.finalError) return END;
+  if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql";
+  if (state.errorContext) return END;
+  return "limit_inject";
+}
+
+function routeAfterExecute(state) {
+  if (state.finalError) return END;
+  if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql";
+  if (state.errorContext) return END;
+  return "summarize_results";
+}
 
 const graph = new StateGraph(AgentState)
   .addNode("retrieve_schema", retrieveSchema)
@@ -234,5 +265,21 @@ const graph = new StateGraph(AgentState)
 
 export async function answerQuestion(sessionId, question) {
   const state = await graph.invoke({ sessionId, question, fullSchema: [], relevantSchema: [], sql: "", attemptCount: 0, errorContext: "", truncated: false, limitNote: "", columns: [], rows: [], rowCount: 0, summary: "", chartSuggestion: null, finalError: "" });
-  return { sql: state.sql || "", summary: state.summary || "", columns: state.columns || [], rows: state.rows || [], row_count: state.rowCount || 0, truncated: Boolean(state.truncated), limit_note: state.limitNote || "", chart_suggestion: state.chartSuggestion || null, error: state.finalError || null };
+  const error = state.finalError || (
+    state.errorContext
+      ? "Analysis stopped before execution: " + state.errorContext
+      : null
+  );
+
+  return {
+    sql: state.sql || "",
+    summary: state.summary || "",
+    columns: state.columns || [],
+    rows: state.rows || [],
+    row_count: state.rowCount || 0,
+    truncated: Boolean(state.truncated),
+    limit_note: state.limitNote || "",
+    chart_suggestion: state.chartSuggestion || null,
+    error,
+  };
 }
