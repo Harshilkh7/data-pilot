@@ -39,7 +39,8 @@ async function callGemini(prompt, maxOutputTokens = 768) {
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             generationConfig: {
               maxOutputTokens,
-              thinkingConfig: { thinkingLevel: "low" },\n                temperature: 0,
+              thinkingConfig: { thinkingLevel: "low" },
+                temperature: 0,
             },
           }),
           signal: controller.signal,
