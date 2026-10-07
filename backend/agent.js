@@ -73,6 +73,11 @@ function injectLimit(sql, question) {
   return { sql: sql + " LIMIT " + cap, truncated: true, limitNote: ALL_ROWS.test(question) ? "Results are capped at " + cap.toLocaleString() + " rows because your question requested a broad result set." : "Results are limited to " + cap.toLocaleString() + " rows. Use a more specific filter to see fewer results." };
 }
 
+function shouldRetryZeroRows(question) {
+  const q = String(question).toLowerCase();
+  return /\b(top|highest|lowest|most|least|maximum|minimum|best|worst|revenue|sales|selling|spending|customers|orders|count|how many|total|average|avg|monthly|yearly|daily|trend|by)\b/.test(q);
+}
+
 function chartSuggestion(question, columns, rows) {
   if (rows.length < 2 || columns.length < 2 || columns.length > 6) return null;
   const q = question.toLowerCase();
@@ -103,7 +108,10 @@ Rules:
 4. For top/extreme/specific-N questions, include the requested LIMIT.
 5. If the question cannot be answered from the schema, output exactly CANNOT_ANSWER.
 6. For which-entity-has-the-most questions, select both the entity descriptor and aggregate metric.
-7. Respect the SQL dialect: ${session.runtime.type}.
+7. Do not add restrictive WHERE filters, status values, date filters, or other conditions unless the user explicitly asks for them.
+8. For spending/sales/revenue questions, prefer aggregating transaction amounts from orders/order_items and joining through the stated foreign-key relationships.
+9. If a previous attempt returned zero rows, simplify the query, verify joins and column names, and remove any invented filters.
+10. Respect the SQL dialect: ${session.runtime.type}.
 
 Schema:
 ${schema}
@@ -126,8 +134,28 @@ async function executeSql(state) {
   try {
     const result = await getSession(state.sessionId).runtime.query(state.sql);
     const rows = result.rows.map(row => result.columns.map(column => { const value = row[column]; if (value instanceof Date) return value.toISOString(); if (typeof value === "bigint") return Number(value); return value === undefined ? null : value; }));
+    console.log("[Query]", JSON.stringify({ question: state.question, attempt: state.attemptCount, sql: state.sql, rowCount: rows.length, columns: result.columns }));
+    if (rows.length === 0 && shouldRetryZeroRows(state.question) && state.attemptCount < MAX_AGENT_ATTEMPTS) {
+      return {
+        columns: result.columns,
+        rows,
+        rowCount: 0,
+        errorContext: "The generated SQL executed successfully but returned 0 rows. Re-check the joins, aggregation, and filters. Do not invent restrictive filters or status values; generate a broader query that directly answers the user's question from the available schema."
+      };
+    }
+    if (rows.length === 0 && shouldRetryZeroRows(state.question)) {
+      return {
+        columns: result.columns,
+        rows,
+        rowCount: 0,
+        finalError: "The generated query returned 0 rows after multiple correction attempts. Please inspect the generated SQL."
+      };
+    }
     return { columns: result.columns, rows, rowCount: rows.length, errorContext: "" };
-  } catch (error) { return { columns: [], rows: [], rowCount: 0, errorContext: "Database execution error: " + error.message }; }
+  } catch (error) {
+    console.log("[QueryError]", JSON.stringify({ question: state.question, attempt: state.attemptCount, sql: state.sql, error: error.message }));
+    return { columns: [], rows: [], rowCount: 0, errorContext: "Database execution error: " + error.message };
+  }
 }
 
 async function summarizeResults(state) {
