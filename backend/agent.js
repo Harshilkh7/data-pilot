@@ -12,69 +12,66 @@ const AgentState = Annotation.Root({
   rowCount: Annotation({ default: () => 0 }), summary: Annotation({ default: () => "" }), chartSuggestion: Annotation({ default: () => null }), finalError: Annotation({ default: () => "" }),
 });
 
-async function callGemini(prompt, maxOutputTokens = 1024) {
+async function callGemini(prompt, maxOutputTokens = 768) {
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
 
+  // Do not burn the Gemini free-tier quota with blind retries across models.
+  // A quota error is terminal for this request; a missing model (404) may use
+  // one configured fallback model.
   const models = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS.filter(m => m !== GEMINI_MODEL)];
   let lastError;
 
   for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-      try {
-        console.log("[Gemini] request", JSON.stringify({ model, attempt: attempt + 1, maxOutputTokens }));
-        const response = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": GEMINI_API_KEY,
+    try {
+      console.log("[Gemini] request", JSON.stringify({ model, maxOutputTokens }));
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+          },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              maxOutputTokens,
+              thinkingConfig: { thinkingLevel: "low" },
             },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                maxOutputTokens,
-                thinkingConfig: { thinkingLevel: "low" },
-              },
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        const body = await response.text();
-
-        if (!response.ok) {
-          lastError = new Error("Gemini API " + response.status + ": " + body.slice(0, 500));
-          console.warn("[Gemini] error", lastError.message);
-          if ([400, 401, 403, 404].includes(response.status)) break;
-          if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
-          continue;
+          }),
+          signal: controller.signal,
         }
+      );
 
-        const data = JSON.parse(body);
-        const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
-        if (!text.trim()) {
-          lastError = new Error("Gemini returned an empty response.");
-          console.warn("[Gemini] empty response", JSON.stringify({ model, attempt: attempt + 1 }));
-          if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
-          continue;
-        }
+      const body = await response.text();
 
-        console.log("[Gemini] success", JSON.stringify({ model, attempt: attempt + 1 }));
-        return text;
-      } catch (error) {
-        lastError = error.name === "AbortError"
-          ? new Error("Gemini request timed out after 25 seconds.")
-          : error;
-        console.warn("[Gemini] request failed", lastError.message);
-
-        if (attempt === 0) await new Promise(r => setTimeout(r, 1500));
-      } finally {
-        clearTimeout(timeout);
+      if (!response.ok) {
+        lastError = new Error("Gemini API " + response.status + ": " + body.slice(0, 800));
+        console.warn("[Gemini] error", lastError.message);
+        // Only fall through to another model when the requested model itself
+        // is unavailable.  Do not retry quota/auth errors.
+        if (response.status === 404) continue;
+        throw lastError;
       }
+
+      const data = JSON.parse(body);
+      const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+      if (!text.trim()) throw new Error("Gemini returned an empty response.");
+
+      console.log("[Gemini] success", JSON.stringify({ model }));
+      return text;
+    } catch (error) {
+      lastError = error.name === "AbortError"
+        ? new Error("Gemini request timed out after 15 seconds.")
+        : error;
+      console.warn("[Gemini] request failed", lastError.message);
+      if (String(lastError.message).startsWith("Gemini API 404")) continue;
+      throw lastError;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -198,18 +195,23 @@ async function executeSql(state) {
 
 async function summarizeResults(state) {
   if (!state.rowCount) return { summary: "No matching records were found.", chartSuggestion: null };
-  const preview = JSON.stringify({ columns: state.columns, rows: state.rows.slice(0, 50), total_rows: state.rowCount });
-  try {
-    const summary = (await callGemini(`You are a data analyst assistant. Write a concise 1-3 sentence natural-language summary of the findings. Do not mention SQL syntax. Focus on what the data reveals.
 
-User question: ${state.question}
+  // Keep the result pipeline independent of a second Gemini call. This is
+  // important on Gemini free-tier projects where a single user query should
+  // consume only one generation request.
+  const preview = state.rows.slice(0, 3).map(row =>
+    state.columns.map((column, i) => column + "=" + String(row[i] ?? "NULL")).join(", ")
+  ).join(" | ");
 
-Query results:
-${preview}`, 256)).trim();
-    return { summary, chartSuggestion: chartSuggestion(state.question, state.columns, state.rows) };
-  } catch { return { summary: "Query returned " + state.rowCount.toLocaleString() + " row(s).", chartSuggestion: chartSuggestion(state.question, state.columns, state.rows) }; }
+  const summary = state.rowCount === 1
+    ? "The query returned one matching record: " + preview + "."
+    : "The query returned " + state.rowCount.toLocaleString() + " rows. Sample results: " + preview + (state.rowCount > 3 ? " …" : ".");
+
+  return {
+    summary,
+    chartSuggestion: chartSuggestion(state.question, state.columns, state.rows),
+  };
 }
-
 function routeAfterGenerate(state) { return state.finalError ? END : "validate_sql"; }
 function routeAfterValidate(state) { if (state.finalError) return END; if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql"; if (state.errorContext) return END; return "limit_inject"; }
 function routeAfterExecute(state) { if (state.errorContext && state.attemptCount < MAX_AGENT_ATTEMPTS) return "generate_sql"; if (state.errorContext) return END; return "summarize_results"; }
