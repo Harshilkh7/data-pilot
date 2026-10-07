@@ -9,6 +9,7 @@ import {
   CHROMA_TENANT,
   CHROMA_DATABASE,
   CHROMA_API_KEY,
+  CHROMA_AUTH_TOKEN,
   RAG_TOP_K,
   RAG_SKIP_THRESHOLD,
 } from "./config.js";
@@ -26,7 +27,12 @@ function getChromaClient() {
   if (CHROMA_API_KEY) {
     chromaClient = new CloudClient({ apiKey: CHROMA_API_KEY, tenant: CHROMA_TENANT, database: CHROMA_DATABASE });
   } else {
-    chromaClient = new ChromaClient({ path: CHROMA_URL, tenant: CHROMA_TENANT, database: CHROMA_DATABASE });
+    chromaClient = new ChromaClient({
+      path: CHROMA_URL,
+      tenant: CHROMA_TENANT,
+      database: CHROMA_DATABASE,
+      headers: CHROMA_AUTH_TOKEN ? { Authorization: `Bearer ${CHROMA_AUTH_TOKEN}` } : undefined,
+    });
   }
   return chromaClient;
 }
@@ -81,7 +87,11 @@ async function tryChromaIndex(sessionId, tables, descriptions, embeddings) {
   const client = getChromaClient();
   const name = collectionName(sessionId);
   try { await client.deleteCollection({ name }); } catch {}
-  const collection = await client.createCollection({ name, metadata: { "hnsw:space": "cosine" } });
+  const collection = await client.createCollection({
+    name,
+    metadata: { "hnsw:space": "cosine" },
+    embeddingFunction: null,
+  });
   await collection.add({ ids: tables.map(t => t.name), documents: descriptions, embeddings, metadatas: tables.map(t => ({ table_name: t.name })) });
   return { provider: "chroma", collection };
 }
@@ -117,7 +127,7 @@ export async function retrieveRelevantTables(sessionId, question, fullSchema) {
   const queryEmbedding = (await embedTexts([question]))[0];
   const name = collectionName(sessionId);
   try {
-    const collection = await getChromaClient().getCollection({ name });
+    const collection = await getChromaClient().getCollection({ name, embeddingFunction: null });
     const result = await collection.query({ queryEmbeddings: [queryEmbedding], nResults: Math.min(RAG_TOP_K, fullSchema.length), include: ["metadatas", "distances"] });
     const names = new Set();
     for (const list of result.metadatas || []) for (const meta of list || []) if (meta?.table_name) names.add(meta.table_name);
