@@ -33,15 +33,10 @@ CREATE TABLE IF NOT EXISTS order_items (order_item_id INTEGER PRIMARY KEY, order
 CREATE TABLE IF NOT EXISTS payments (payment_id INTEGER PRIMARY KEY, order_id INTEGER, payment_date TEXT, payment_method TEXT, payment_status TEXT, amount REAL, FOREIGN KEY(order_id) REFERENCES orders(order_id));
 CREATE TABLE IF NOT EXISTS reviews (review_id INTEGER PRIMARY KEY, customer_id INTEGER, product_id INTEGER, rating INTEGER, review_text TEXT, review_date TEXT, FOREIGN KEY(customer_id) REFERENCES customers(customer_id), FOREIGN KEY(product_id) REFERENCES products(product_id));
 CREATE TABLE IF NOT EXISTS shipments (shipment_id INTEGER PRIMARY KEY, order_id INTEGER, shipped_at TEXT, delivered_at TEXT, carrier TEXT, shipment_status TEXT, FOREIGN KEY(order_id) REFERENCES orders(order_id));
-CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
-CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
-CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_items_product ON order_items(product_id);
-CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
 `;
 
 export function ensureDemoDatabase(filePath) {
+  const seedStart = Date.now();
   const dbPath=path.resolve(filePath);
   fs.mkdirSync(path.dirname(dbPath),{recursive:true});
   let db=new DatabaseSync(dbPath);
@@ -71,6 +66,7 @@ export function ensureDemoDatabase(filePath) {
 
     if (healthy) {
       db.close();
+      console.log("[DemoDB] existing database is healthy", JSON.stringify({ ms: Date.now() - seedStart, path: dbPath }));
       return;
     }
 
@@ -85,8 +81,16 @@ export function ensureDemoDatabase(filePath) {
   }
 
   db.exec(SCHEMA);
+  console.log("[DemoDB] seeding database", JSON.stringify({ path: dbPath }));
 
-  const categoryNames=[...new Set(PRODUCTS.map(p=>p[1]))];
+  // The demo database is disposable. One transaction makes ~25k inserts
+  // dramatically faster than committing every row individually.
+  db.exec("PRAGMA synchronous = OFF");
+  db.exec("PRAGMA journal_mode = MEMORY");
+  db.exec("BEGIN TRANSACTION");
+
+  try {
+    const categoryNames=[...new Set(PRODUCTS.map(p=>p[1]))];
   const sellers=[
     [1,"TechCart India","Bengaluru","India",4.7],[2,"Urban Essentials","Mumbai","India",4.5],[3,"Global Goods","Delhi","India",4.6],
     [4,"Prime Marketplace","New York","USA",4.4],[5,"Northstar Retail","London","UK",4.8],[6,"Maple Commerce","Toronto","Canada",4.3]
@@ -150,7 +154,26 @@ export function ensureDemoDatabase(filePath) {
     if(r<0.50) return 4;
     return 5;
   }
-  for(let id=1;id<=1600;id++) addReview.run(id,int(1,500),int(1,120),randomRating(),choice(texts),sqlDate(dateBetween(start,end)).slice(0,10));
+    for(let id=1;id<=1600;id++) addReview.run(id,int(1,500),int(1,120),randomRating(),choice(texts),sqlDate(dateBetween(start,end)).slice(0,10));
 
-  db.close();
+    // Build indexes after the bulk load so inserts do not update six indexes
+    // on every row.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
+      CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+      CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
+      CREATE INDEX IF NOT EXISTS idx_items_product ON order_items(product_id);
+      CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+      CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
+    `);
+
+    db.exec("COMMIT");
+    console.log("[DemoDB] seed complete", JSON.stringify({ ms: Date.now() - seedStart, path: dbPath }));
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    console.error("[DemoDB] seed failed", error);
+    throw error;
+  } finally {
+    db.close();
+  }
 }
