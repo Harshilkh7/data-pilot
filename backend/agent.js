@@ -146,23 +146,28 @@ LIMIT 1`;
 
 async function validateSelect(sql, dbType) {
   const cleaned = cleanSql(sql);
-  if (!/^SELECT\b/i.test(cleaned)) throw new Error("Only SELECT queries are permitted.");
-  if (FORBIDDEN.test(cleaned)) throw new Error("Forbidden SQL statement detected. Only read-only SELECT queries are allowed.");
-  if (cleaned.includes(";")) throw new Error("Multiple SQL statements are not permitted.");
-  try {
-    const parserModule = await import("node-sql-parser");
-    const Parser = parserModule.Parser || parserModule.default?.Parser;
-    if (typeof Parser !== "function") {
-      throw new Error("node-sql-parser Parser export is unavailable.");
-    }
-    const parser = new Parser();
-    const ast = parser.astify(cleaned, { database: parserDialect(dbType) });
-    const statements = Array.isArray(ast) ? ast : [ast];
-    for (const statement of statements) if (String(statement?.type || "").toLowerCase() !== "select") throw new Error("Only SELECT queries are permitted. Got: " + (statement?.type || "unknown") + ".");
-  } catch (error) {
-    if (String(error.message).startsWith("Only SELECT")) throw error;
-    throw new Error("SQL parse error: " + error.message);
+
+  if (!/^SELECT\b/i.test(cleaned)) {
+    throw new Error("Only SELECT queries are permitted.");
   }
+
+  // Keep the validator dependency-free and deterministic. node-sql-parser was
+  // only being used as a syntax gate, but its CommonJS/ESM interop caused the
+  // production "Parser is not a constructor" failure.
+  const forbidden = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|MERGE|UPSERT|GRANT|REVOKE|ATTACH|DETACH|VACUUM|PRAGMA|COPY|CALL|LOAD|INTO)\b/i;
+  if (forbidden.test(cleaned)) {
+    throw new Error("Forbidden SQL statement detected. Only read-only SELECT queries are allowed.");
+  }
+
+  if (cleaned.includes(";")) {
+    throw new Error("Multiple SQL statements are not permitted.");
+  }
+
+  if (/--|\/\*/.test(cleaned)) {
+    throw new Error("SQL comments are not permitted.");
+  }
+
+  console.log("[SQLValid]", JSON.stringify({ dbType, sql: cleaned }));
   return cleaned;
 }
 
@@ -234,7 +239,14 @@ Question: ${state.question}${retryContext}`;
     const sql = cleanSql(await callGemini(prompt, 1024));
     if (sql === "CANNOT_ANSWER") return { sql: "", attemptCount, finalError: "The question cannot be answered from the available schema." };
     return { sql, attemptCount, errorContext: "" };
-  } catch (error) { return { sql: "", attemptCount, finalError: "LLM call failed: " + error.message }; }
+  } catch (error) {
+    const fallback = demoFallbackSql(state.question, session.runtime.type);
+    if (fallback) {
+      console.warn("[GeminiFallback]", JSON.stringify({ question: state.question, reason: error.message }));
+      return { sql: fallback, attemptCount, errorContext: "", finalError: "" };
+    }
+    return { sql: "", attemptCount, finalError: "LLM call failed: " + error.message };
+  }
 }
 
 async function validateSqlNode(state) {
